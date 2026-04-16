@@ -126,3 +126,24 @@ POST /vps/*/reinstall
 ```
 
 Usage: `python3 scripts/provision_vps.py`
+
+### Hostinger API (alternative to OVH)
+
+| Secret | Description | Where to get |
+|---|---|---|
+| `HOSTINGER_API_TOKEN` | Hostinger API token | hPanel → Account → API → Generate token |
+| `HOSTINGER_VM_ID` | VM ID (numeric) | hPanel URL: `/vps/{VM_ID}/overview` |
+
+Usage: `python3 scripts/provision_vps_hostinger.py`
+
+**Hostinger advantage over OVH:** Hostinger also provides a first-party
+GitHub Action that deploys Docker Compose apps with just an API key —
+no SSH key management needed in CI at all:
+
+```yaml
+- uses: hostinger/deploy-on-vps@v2
+  with:
+    api-key: ${{ secrets.HOSTINGER_API_TOKEN }}
+    virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
+    docker-compose-path: docker-compose.yml
+```

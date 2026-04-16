@@ -153,7 +153,8 @@ jobs:
             MISSING=()
             for var in LITELLM_MASTER_KEY POSTGRES_PASSWORD GROQ_API_KEY \
                        LANGFLOW_SECRET_KEY LANGFLOW_DB_PASSWORD LANGFLOW_ADMIN_PASSWORD \
-                       GLITCHTIP_SECRET_KEY GLITCHTIP_DB_PASSWORD; do
+                       GLITCHTIP_SECRET_KEY GLITCHTIP_DB_PASSWORD \
+                       SURREAL_PASS OPENFGA_DB_PASSWORD OPENFGA_PRESHARED_KEY; do
               val=$(grep "^${var}=" /home/ubuntu/autonomyx-model-gateway/.env | cut -d= -f2-)
               if [ -z "$val" ] || echo "$val" | grep -q "YOUR_"; then
                 MISSING+=("$var")
@@ -195,6 +196,77 @@ jobs:
                 exit 1
               fi
             done
+
+            echo "=== SurrealDB: ensure healthy ==="
+            for i in $(seq 1 12); do
+              if docker exec autonomyx-surrealdb /surreal is-ready                    --conn http://localhost:8000 2>/dev/null; then
+                echo "SurrealDB healthy"
+                break
+              fi
+              echo "Waiting for SurrealDB... ($i/12)"
+              sleep 5
+            done
+
+            echo "=== OpenFGA: bootstrap if needed ==="
+            # Only bootstrap if OPENFGA_STORE_ID is not yet set
+            STORE_ID=$(grep "^OPENFGA_STORE_ID=" .env | cut -d= -f2-)
+            PRESHARED=$(grep "^OPENFGA_PRESHARED_KEY=" .env | cut -d= -f2-)
+            if [ -z "$STORE_ID" ] || echo "$STORE_ID" | grep -q "^$"; then
+              echo "Creating OpenFGA store..."
+              # Wait for OpenFGA to be ready
+              for i in $(seq 1 12); do
+                if curl -sf -o /dev/null                   -H "Authorization: Bearer $PRESHARED"                   http://localhost:8080/healthz; then
+                  echo "OpenFGA ready"
+                  break
+                fi
+                echo "Waiting for OpenFGA... ($i/12)"
+                sleep 5
+              done
+
+              # Create store
+              STORE_RESP=$(curl -s -X POST http://localhost:8080/stores                 -H "Authorization: Bearer $PRESHARED"                 -H "Content-Type: application/json"                 -d '{"name":"autonomyx-gateway"}')
+              NEW_STORE_ID=$(echo "$STORE_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+
+              if [ -n "$NEW_STORE_ID" ]; then
+                echo "Store created: $NEW_STORE_ID"
+                sed -i "s/^OPENFGA_STORE_ID=.*/OPENFGA_STORE_ID=$NEW_STORE_ID/" .env
+                echo "OPENFGA_STORE_ID saved to .env"
+
+                # Upload authorization model
+                MODEL_DSL=$(cat openfga/model.fga)
+                MODEL_RESP=$(curl -s -X POST                   "http://localhost:8080/stores/${NEW_STORE_ID}/authorization-models"                   -H "Authorization: Bearer $PRESHARED"                   -H "Content-Type: application/json"                   -d "{"schema_version":"1.1","type_definitions":[]}")
+                echo "Model upload attempted (manual verify recommended)"
+
+                # Write bootstrap tuples (strip JSON comments first)
+                python3 scripts/prep_fga_tuples.py
+                HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X POST                   "http://localhost:8080/stores/${NEW_STORE_ID}/write"                   -H "Authorization: Bearer $PRESHARED"                   -H "Content-Type: application/json"                   -d @/tmp/fga_tuples.json)
+                echo "Bootstrap tuples write: HTTP $HTTP"
+                rm -f /tmp/fga_tuples.json
+
+                # Restart LiteLLM to pick up new OPENFGA_STORE_ID
+                docker compose restart litellm
+              else
+                echo "WARNING: Could not create OpenFGA store — check OPENFGA_PRESHARED_KEY"
+              fi
+            else
+              echo "OpenFGA store already configured: $STORE_ID"
+            fi
+
+            echo "=== SurrealDB: migrate from cloud if needed ==="
+            SURREAL_URL_LOCAL=$(grep "^SURREAL_URL=" .env | cut -d= -f2-)
+            CLOUD_URL=$(grep "^SURREAL_URL_CLOUD=" .env | cut -d= -f2- || echo "")
+            if [ -n "$CLOUD_URL" ] && ! echo "$CLOUD_URL" | grep -q "^#"; then
+              echo "Cloud URL found — run migration manually:"
+              echo "  ./scripts/migrate_surrealdb.sh"
+              echo "Then comment out SURREAL_URL_CLOUD in .env"
+            else
+              echo "SurrealDB cloud URL not set — using self-hosted only"
+            fi
+
+            echo "=== Trust centre: verify serving ==="
+            if curl -sf -o /dev/null http://localhost/; then
+              echo "Trust container serving"
+            fi
 
             echo "=== Final service status ==="
             docker compose ps

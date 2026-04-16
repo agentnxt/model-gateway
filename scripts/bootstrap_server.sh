@@ -12,6 +12,13 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 MARKER="/var/lib/autonomyx-bootstrap-complete"
 
+# Run privileged commands with sudo if not already root
+SUDO=""
+if [ "$(id -u)" != "0" ]; then
+  SUDO="sudo"
+  echo "Running as $(whoami) — using sudo for privileged operations"
+fi
+
 # ── Always: wait for apt lock, then update + upgrade ─────────────────────────
 echo "=== System packages ==="
 for i in $(seq 1 12); do
@@ -19,11 +26,11 @@ for i in $(seq 1 12); do
   echo "  Waiting for apt lock ($i/12)..."; sleep 5
 done
 
-apt-get update -qq
-apt-get upgrade -y -qq \
+$SUDO apt-get update -qq
+$SUDO apt-get upgrade -y -qq \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
-apt-get autoremove -y -qq
+$SUDO apt-get autoremove -y -qq
 echo "  System packages up to date"
 
 # ── First deploy only: full bootstrap ────────────────────────────────────────
@@ -35,7 +42,7 @@ fi
 echo "=== First deploy: full server bootstrap ==="
 
 # Core packages
-apt-get install -y -qq \
+$SUDO apt-get install -y -qq \
   curl wget git ca-certificates gnupg \
   python3 python3-pip openssl jq unzip \
   unattended-upgrades apt-listchanges fail2ban
@@ -43,21 +50,21 @@ apt-get install -y -qq \
 # Docker
 if ! command -v docker &>/dev/null; then
   echo "  Installing Docker Engine..."
-  install -m 0755 -d /etc/apt/keyrings
+  $SUDO install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
     -o /etc/apt/keyrings/docker.asc
-  chmod a+r /etc/apt/keyrings/docker.asc
+  $SUDO chmod a+r /etc/apt/keyrings/docker.asc
   CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
   ARCH=$(dpkg --print-architecture)
   echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] \
 https://download.docker.com/linux/ubuntu ${CODENAME} stable" \
     > /etc/apt/sources.list.d/docker.list
-  apt-get update -qq
-  apt-get install -y -qq \
+  $SUDO apt-get update -qq
+  $SUDO apt-get install -y -qq \
     docker-ce docker-ce-cli containerd.io \
     docker-buildx-plugin docker-compose-plugin
-  systemctl enable docker
-  systemctl start docker
+  $SUDO systemctl enable docker
+  $SUDO systemctl start docker
   echo "  Docker installed: $(docker --version)"
 else
   echo "  Docker already installed: $(docker --version)"
@@ -65,7 +72,7 @@ fi
 
 # ubuntu user
 id ubuntu &>/dev/null || useradd -m -s /bin/bash ubuntu
-usermod -aG docker ubuntu
+$SUDO usermod -aG docker ubuntu
 mkdir -p /home/ubuntu/.ssh
 chmod 700 /home/ubuntu/.ssh
 if [ -f /root/.ssh/authorized_keys ]; then
@@ -102,8 +109,8 @@ Unattended-Upgrade::Package-Blacklist {
 Unattended-Upgrade::Automatic-Reboot "false";
 Unattended-Upgrade::Mail "chinmay@openautonomyx.com";
 APT
-systemctl enable unattended-upgrades
-systemctl restart unattended-upgrades
+$SUDO systemctl enable unattended-upgrades
+$SUDO systemctl restart unattended-upgrades
 echo "  Unattended security upgrades configured"
 
 # fail2ban
@@ -114,26 +121,26 @@ maxretry = 5
 bantime  = 3600
 findtime = 600
 F2B
-systemctl enable fail2ban
-systemctl restart fail2ban
+$SUDO systemctl enable fail2ban
+$SUDO systemctl restart fail2ban
 echo "  fail2ban configured"
 
 # Firewall
-ufw --force enable
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh  comment "SSH"
-ufw allow 80   comment "HTTP"
-ufw allow 443  comment "HTTPS"
+$SUDO ufw --force enable
+$SUDO ufw default deny incoming
+$SUDO ufw default allow outgoing
+$SUDO ufw allow ssh  comment "SSH"
+$SUDO ufw allow 80   comment "HTTP"
+$SUDO ufw allow 443  comment "HTTPS"
 echo "  ufw configured"
 
 # Swap
 TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
 if [ "$TOTAL_RAM" -lt 8192 ] && [ ! -f /swapfile ]; then
-  fallocate -l 2G /swapfile
+  $SUDO fallocate -l 2G /swapfile
   chmod 600 /swapfile
-  mkswap /swapfile
-  swapon /swapfile
+  $SUDO mkswap /swapfile
+  $SUDO swapon /swapfile
   echo "/swapfile none swap sw 0 0" >> /etc/fstab
   echo "  2GB swap created"
 fi
@@ -148,8 +155,8 @@ if ! command -v frps &>/dev/null; then
   cd /tmp
   curl -fsSL "$FRP_URL" -o "$FRP_ARCHIVE"
   tar -xzf "$FRP_ARCHIVE"
-  cp "frp_${FRP_VERSION}_linux_amd64/frps" /usr/local/bin/frps
-  chmod +x /usr/local/bin/frps
+  $SUDO cp "frp_${FRP_VERSION}_linux_amd64/frps" /usr/local/bin/frps
+  $SUDO chmod +x /usr/local/bin/frps
   rm -rf "frp_${FRP_VERSION}_linux_amd64" "$FRP_ARCHIVE"
   cd -
   echo "  frps installed: $(frps --version)"
@@ -158,7 +165,7 @@ else
 fi
 
 # Write frps config from template
-mkdir -p /etc/frp
+$SUDO mkdir -p /etc/frp
 FRP_TOKEN="${FRP_TOKEN:-$(openssl rand -hex 32)}"
 
 # Save token to .env if not already there
@@ -189,9 +196,9 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 SVCEOF
 
-systemctl daemon-reload
-systemctl enable frps
-systemctl restart frps
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable frps
+$SUDO systemctl restart frps
 echo "  frps systemd service running"
 
 # Write marker — bootstrap complete

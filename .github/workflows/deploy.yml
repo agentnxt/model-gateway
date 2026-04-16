@@ -177,12 +177,18 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: vps.openautonomyx.com
-          username: root
+          username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           timeout: 60s
           envs: GROQ_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,VERTEX_PROJECT_ID,VERTEX_LOCATION,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,STRIPE_SECRET_KEY,GLITCHTIP_AUTH_TOKEN,LITELLM_MASTER_KEY,FRP_TOKEN
           script: |
             set -e
+            # Ensure ubuntu is in docker group (bootstrap may have just added it)
+            if ! groups | grep -q docker; then
+              echo "Adding ubuntu to docker group..."
+              sudo usermod -aG docker ubuntu
+              exec sg docker "$0 $@"
+            fi
             cd /home/ubuntu/autonomyx-model-gateway
 
             # Write each secret from GitHub Secrets into .env
@@ -215,7 +221,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: vps.openautonomyx.com
-          username: root
+          username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           timeout: 300s
           script: |
@@ -251,7 +257,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: vps.openautonomyx.com
-          username: root
+          username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           timeout: 600s
           script: |

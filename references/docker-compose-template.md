@@ -200,9 +200,7 @@ services:
 
   # ── Playwright Scraper ────────────────────────────────────────────────────
   playwright:
-    build:
-      context: ./playwright
-      dockerfile: Dockerfile
+    image: thefractionalpm/autonomyx-playwright:latest
     container_name: autonomyx-playwright
     restart: always
     networks:
@@ -425,9 +423,7 @@ services:
 
   # ── Playwright Scraper ────────────────────────────────────────────────────
   playwright:
-    build:
-      context: ./playwright
-      dockerfile: Dockerfile
+    image: thefractionalpm/autonomyx-playwright:latest
     container_name: autonomyx-playwright
     restart: always
     ports:

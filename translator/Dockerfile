@@ -24,15 +24,7 @@ RUN pip install --no-cache-dir \
 COPY translator_server.py .
 
 # Pre-download fastText LID model (917KB) at build time
-RUN python3 -c "
-import urllib.request, os
-os.makedirs('/models', exist_ok=True)
-urllib.request.urlretrieve(
-    'https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz',
-    '/models/lid.176.ftz'
-)
-print('fastText LID downloaded')
-"
+RUN python3 -c "import urllib.request, os; os.makedirs('/models', exist_ok=True); urllib.request.urlretrieve('https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz', '/models/lid.176.ftz'); print('fastText LID downloaded')"
 
 RUN useradd -m translator && chown -R translator /models
 USER translator

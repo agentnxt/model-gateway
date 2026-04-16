@@ -267,6 +267,11 @@ jobs:
               echo "SurrealDB cloud URL not set — using self-hosted only"
             fi
 
+            echo "=== GlitchTip: bootstrap uptime monitors ==="
+            GLITCHTIP_URL=$(grep "^GLITCHTIP_DOMAIN=" .env | cut -d= -f2- | sed 's|https://||' || echo "")
+            GLITCHTIP_AUTH_TOKEN=$(grep "^GLITCHTIP_AUTH_TOKEN=" .env | cut -d= -f2- || echo "")
+            GLITCHTIP_URL="https://errors.openautonomyx.com"             GLITCHTIP_AUTH_TOKEN="$GLITCHTIP_AUTH_TOKEN"             python3 scripts/bootstrap_glitchtip_monitors.py
+
             echo "=== Trust centre: verify serving ==="
             if curl -sf -o /dev/null http://localhost/; then
               echo "Trust container serving"

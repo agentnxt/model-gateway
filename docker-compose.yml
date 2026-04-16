@@ -270,21 +270,23 @@ services:
 
 
 
-  # ── Cloudflare Tunnel (zero-trust ingress — no open ports needed) ─────────
-  # One tunnel → routes all internal services to public subdomains
-  # Configured via Cloudflare Zero Trust dashboard:
-  #   one.dash.cloudflare.com → Networks → Tunnels
-  # Each public hostname maps to an internal container:service:port
-  # Zero Trust Access policies sit in front of each hostname
-  cloudflared:
-    image: cloudflare/cloudflared:2025.4.0
-    container_name: autonomyx-cloudflared
+  # ── Newt (Pangolin tunnel client — open source Cloudflare Tunnel alternative)
+  # Connects to Pangolin server via WireGuard tunnel
+  # Pangolin handles: SSL (Let's Encrypt), routing, auth, access control
+  # No dashboard login required — fully config-file driven
+  # Docs: https://github.com/fosrl/pangolin
+  newt:
+    image: fosrl/newt:latest
+    container_name: autonomyx-newt
     restart: always
     networks:
       - coolify
-    command: tunnel --no-autoupdate run
     environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      - PANGOLIN_ENDPOINT=${PANGOLIN_ENDPOINT}
+      - NEWT_ID=${NEWT_ID}
+      - NEWT_SECRET=${NEWT_SECRET}
+    cap_add:
+      - NET_ADMIN    # needed for WireGuard tunnel setup
     labels:
       - "traefik.enable=false"
 

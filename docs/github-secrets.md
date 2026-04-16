@@ -148,8 +148,10 @@ no SSH key management needed in CI at all:
     docker-compose-path: docker-compose.yml
 ```
 
-### Cloudflare Tunnel
+### Pangolin Tunnel (open source)
 
 | Secret | Description | Where to get |
 |---|---|---|
-| `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnel token | one.dash.cloudflare.com → Networks → Tunnels → Create tunnel → Docker → copy token |
+| `PANGOLIN_ENDPOINT` | Your Pangolin server URL | e.g. `https://tunnel.openautonomyx.com` |
+| `NEWT_ID` | Newt site ID | Pangolin dashboard → Sites → Create Site |
+| `NEWT_SECRET` | Newt site secret | Pangolin dashboard → Sites → Create Site |

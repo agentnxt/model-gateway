@@ -115,6 +115,38 @@ services:
     depends_on:
       - prometheus
 
+
+  # ── Playwright Scraper ────────────────────────────────────────────────────
+  # Crawl any URL → extract structured data → embed → store in SurrealDB
+  # shm_size CRITICAL: Chrome crashes without it
+  playwright-scraper:
+    build:
+      context: ./playwright_scraper
+      dockerfile: Dockerfile
+    container_name: autonomyx-playwright
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - GATEWAY_URL=http://litellm:4000
+      - OLLAMA_URL=http://ollama:11434
+      - SURREAL_URL=${SURREAL_URL}
+      - SURREAL_NS=autonomyx
+      - SURREAL_DB=scraper
+      - SURREAL_USER=${SURREAL_USER}
+      - SURREAL_PASS=${SURREAL_PASS}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - EXTRACT_MODEL=ollama/qwen3:30b-a3b
+      - EMBED_MODEL=nomic-embed-text
+      - CHUNK_SIZE=512
+      - CHUNK_OVERLAP=64
+      - MAX_PAGES=200
+    shm_size: '256m'        # CRITICAL — Chrome crashes without this
+    mem_limit: 2g           # Chrome is memory-hungry — hard cap
+    memswap_limit: 2g
+    labels:
+      - "traefik.enable=false"   # internal only — not exposed publicly
+
   # ── Langflow ──────────────────────────────────────────────────────────────
   langflow:
     image: langflowai/langflow:latest
@@ -260,6 +292,38 @@ services:
     depends_on:
       - prometheus
 
+
+  # ── Playwright Scraper ────────────────────────────────────────────────────
+  # Crawl any URL → extract structured data → embed → store in SurrealDB
+  # shm_size CRITICAL: Chrome crashes without it
+  playwright-scraper:
+    build:
+      context: ./playwright_scraper
+      dockerfile: Dockerfile
+    container_name: autonomyx-playwright
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - GATEWAY_URL=http://litellm:4000
+      - OLLAMA_URL=http://ollama:11434
+      - SURREAL_URL=${SURREAL_URL}
+      - SURREAL_NS=autonomyx
+      - SURREAL_DB=scraper
+      - SURREAL_USER=${SURREAL_USER}
+      - SURREAL_PASS=${SURREAL_PASS}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - EXTRACT_MODEL=ollama/qwen3:30b-a3b
+      - EMBED_MODEL=nomic-embed-text
+      - CHUNK_SIZE=512
+      - CHUNK_OVERLAP=64
+      - MAX_PAGES=200
+    shm_size: '256m'        # CRITICAL — Chrome crashes without this
+    mem_limit: 2g           # Chrome is memory-hungry — hard cap
+    memswap_limit: 2g
+    labels:
+      - "traefik.enable=false"   # internal only — not exposed publicly
+
   # ── Langflow ──────────────────────────────────────────────────────────────
   langflow:
     image: langflowai/langflow:latest
@@ -302,4 +366,28 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ── Playwright Scraper (Generic Docker) ──────────────────────────────────
+  playwright-scraper:
+    build:
+      context: ./playwright_scraper
+      dockerfile: Dockerfile
+    container_name: autonomyx-playwright
+    restart: always
+    ports:
+      - "8400:8400"
+    environment:
+      - GATEWAY_URL=http://litellm:4000
+      - OLLAMA_URL=http://ollama:11434
+      - SURREAL_URL=${SURREAL_URL}
+      - SURREAL_NS=autonomyx
+      - SURREAL_DB=scraper
+      - SURREAL_USER=${SURREAL_USER}
+      - SURREAL_PASS=${SURREAL_PASS}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - EXTRACT_MODEL=ollama/qwen3:30b-a3b
+      - EMBED_MODEL=nomic-embed-text
+    shm_size: '256m'
+    mem_limit: 2g
+    memswap_limit: 2g
 ```

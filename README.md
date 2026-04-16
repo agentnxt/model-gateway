@@ -71,6 +71,7 @@ Peak RAM: ~84GB. Runs on a 96GB VPS. No GPU required.
 | `saas-standardizer.json` | Qwen3-30B | Exhaustive SaaS product profile → 18-dimension JSON |
 | `oss-to-saas-analyzer.json` | Qwen3-30B | Score OSS project across 5 commercial archetypes |
 | `structured-data-parser.json` | Python only | Parse JSON/CSV/XML/YAML/Markdown → structured JSON (no LLM) |
+| `site-scraper-rag.json` | Qwen3-30B + nomic-embed-text | Crawl any URL → structured extract → embed → SurrealDB RAG |
 | `feature-gap-analyzer.json` | Qwen3-30B-A3B (always) | Compare 2-3 products → scored feature matrix + gaps + recommendation |
 | `structured-data-parser.json` | Qwen2.5-Coder-32B (always) | Any data sample → Python parser code + schema + tests |
 

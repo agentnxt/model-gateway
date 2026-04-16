@@ -207,3 +207,17 @@ LANGFLOW_ADMIN_PASSWORD=YOUR_LANGFLOW_PASSWORD
 # Virtual key scoped for Langflow — create via /key/generate
 LANGFLOW_VIRTUAL_KEY=sk-autonomyx-langflow-prod
 ```
+
+## Playwright Scraper
+```
+# SurrealDB connection (already set if using SurrealDB Cloud)
+SURREAL_URL=https://schemadb-06ehsj292ppah8kbsk9pmnjjbc.aws-aps1.surreal.cloud
+SURREAL_USER=root
+SURREAL_PASS=YOUR_SURREAL_PASS
+# Models (already set from Ollama + LiteLLM)
+EXTRACT_MODEL=ollama/qwen3:30b-a3b
+EMBED_MODEL=nomic-embed-text
+CHUNK_SIZE=512
+CHUNK_OVERLAP=64
+MAX_PAGES=200
+```

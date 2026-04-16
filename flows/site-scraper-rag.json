@@ -1,0 +1,225 @@
+{
+  "name": "Autonomyx Site Scraper + RAG Builder",
+  "description": "Crawl any URL with Playwright → extract structured data per page via Qwen3-30B → generate embeddings via nomic-embed-text → store in SurrealDB for RAG. Configurable depth: 0=single page, 1=+1 level, -1=entire site. Returns collection name for downstream RAG queries.",
+  "data": {
+    "nodes": [
+      {
+        "id": "Input-scrape",
+        "type": "genericNode",
+        "data": {
+          "type": "TextInput",
+          "node": {
+            "template": {
+              "url": {
+                "type": "str",
+                "required": true,
+                "display_name": "URL to Scrape",
+                "placeholder": "https://example.com",
+                "show": true
+              },
+              "depth": {
+                "type": "str",
+                "display_name": "Crawl Depth",
+                "value": "1",
+                "placeholder": "0=single page, 1=+1 level, -1=full site",
+                "show": true
+              },
+              "max_pages": {
+                "type": "str",
+                "display_name": "Max Pages",
+                "value": "50",
+                "show": true
+              },
+              "collection": {
+                "type": "str",
+                "display_name": "Collection Name (optional)",
+                "placeholder": "auto-generated from URL if empty",
+                "value": "",
+                "show": true
+              },
+              "extract_schema": {
+                "type": "str",
+                "display_name": "Extraction Schema (JSON, optional)",
+                "placeholder": "{\"title\": \"page title\", \"main_topic\": \"...\", \"key_points\": []}",
+                "value": "",
+                "show": true
+              }
+            },
+            "display_name": "Scrape Config"
+          }
+        },
+        "position": {"x": 80, "y": 300}
+      },
+
+      {
+        "id": "HTTP-start-job",
+        "type": "genericNode",
+        "data": {
+          "type": "HTTPRequest",
+          "node": {
+            "template": {
+              "url": {
+                "type": "str",
+                "value": "http://playwright-scraper:8400/scrape",
+                "display_name": "Scraper URL",
+                "show": true
+              },
+              "method": {
+                "type": "str",
+                "value": "POST",
+                "display_name": "Method",
+                "show": true
+              },
+              "headers": {
+                "type": "dict",
+                "value": {"Content-Type": "application/json"},
+                "display_name": "Headers",
+                "show": true
+              },
+              "body": {
+                "type": "str",
+                "value": "{\"url\": \"{url}\", \"depth\": {depth}, \"max_pages\": {max_pages}, \"collection\": \"{collection}\"}",
+                "display_name": "Body",
+                "show": true
+              }
+            },
+            "display_name": "Start Scrape Job",
+            "description": "Submits URL to Playwright scraper. Returns job_id immediately."
+          }
+        },
+        "position": {"x": 380, "y": 300}
+      },
+
+      {
+        "id": "Python-poll",
+        "type": "genericNode",
+        "data": {
+          "type": "PythonFunction",
+          "node": {
+            "template": {
+              "code": {
+                "type": "code",
+                "value": "import httpx, time, json\nfrom langflow.custom import Component\nfrom langflow.io import MessageTextInput, Output\nfrom langflow.schema.message import Message\n\nclass PollJob(Component):\n    display_name = 'Poll Scrape Job'\n    description = 'Poll job status until complete. Returns final result.'\n    inputs = [MessageTextInput(name='job_response', display_name='Job Response')]\n    outputs = [Output(name='result', display_name='Result', method='poll')]\n\n    SCRAPER_URL = 'http://playwright-scraper:8400'\n    MAX_WAIT = 600   # 10 minutes\n    INTERVAL = 5     # poll every 5 seconds\n\n    def poll(self) -> Message:\n        try:\n            data = json.loads(self.job_response.text if hasattr(self.job_response, 'text') else str(self.job_response))\n            job_id = data.get('job_id')\n            if not job_id:\n                return Message(text=json.dumps({'error': 'No job_id in response', 'raw': str(data)}))\n\n            waited = 0\n            while waited < self.MAX_WAIT:\n                r = httpx.get(f'{self.SCRAPER_URL}/status/{job_id}', timeout=10)\n                status = r.json()\n                if status.get('status') in ('complete', 'failed'):\n                    return Message(text=json.dumps(status, indent=2))\n                time.sleep(self.INTERVAL)\n                waited += self.INTERVAL\n\n            return Message(text=json.dumps({'error': 'Timeout waiting for scrape job', 'job_id': job_id}))\n        except Exception as e:\n            return Message(text=json.dumps({'error': str(e)}))",
+                "display_name": "Poll Code",
+                "show": true
+              },
+              "job_response": {
+                "type": "str",
+                "required": true,
+                "display_name": "Job Response",
+                "show": true
+              }
+            },
+            "display_name": "Poll Until Complete",
+            "description": "Polls /status every 5s until job is complete or failed. Max 10 min wait."
+          }
+        },
+        "position": {"x": 680, "y": 300}
+      },
+
+      {
+        "id": "Prompt-summary",
+        "type": "genericNode",
+        "data": {
+          "type": "Prompt",
+          "node": {
+            "template": {
+              "template": {
+                "type": "str",
+                "value": "A website has been scraped and indexed for RAG. Summarise what was done and how to use it.\n\nScrape result:\n{scrape_result}\n\nReturn a brief, friendly summary covering:\n1. What site was scraped and how many pages\n2. The collection name for RAG queries\n3. Example query to try: POST /query with {{\"collection\": \"<name>\", \"query\": \"<question>\"}}\n4. How long it took\n\nBe concise. Plain text, no JSON.",
+                "display_name": "Summary Prompt",
+                "show": true
+              }
+            },
+            "display_name": "Summary Prompt"
+          }
+        },
+        "position": {"x": 980, "y": 180}
+      },
+
+      {
+        "id": "LLM-summary",
+        "type": "genericNode",
+        "data": {
+          "type": "OpenAIModel",
+          "node": {
+            "template": {
+              "openai_api_base": {"type": "str", "value": "http://litellm:4000/v1", "display_name": "API Base", "show": true},
+              "openai_api_key": {"type": "str", "value": "{LANGFLOW_VIRTUAL_KEY}", "display_name": "API Key", "show": true, "password": true},
+              "model_name": {"type": "str", "value": "ollama/llama3.1:8b", "display_name": "Model", "show": true, "info": "8B is sufficient for summarising scrape results"},
+              "temperature": {"type": "float", "value": 0.3, "display_name": "Temperature", "show": true},
+              "max_tokens": {"type": "int", "value": 512, "display_name": "Max Tokens", "show": true}
+            },
+            "display_name": "Llama3.1-8B (Summariser)"
+          }
+        },
+        "position": {"x": 1200, "y": 180}
+      },
+
+      {
+        "id": "Output-result",
+        "type": "genericNode",
+        "data": {
+          "type": "ChatOutput",
+          "node": {
+            "template": {
+              "input_value": {"type": "str", "required": true, "display_name": "Result", "show": true},
+              "should_store_message": {"type": "bool", "value": true, "show": true}
+            },
+            "display_name": "Scrape Complete"
+          }
+        },
+        "position": {"x": 1420, "y": 180}
+      },
+
+      {
+        "id": "Output-raw",
+        "type": "genericNode",
+        "data": {
+          "type": "TextOutput",
+          "node": {
+            "template": {
+              "input_value": {"type": "str", "required": true, "display_name": "Raw Job Result", "show": true}
+            },
+            "display_name": "Raw JSON Result"
+          }
+        },
+        "position": {"x": 980, "y": 420}
+      }
+    ],
+
+    "edges": [
+      {"id": "e1", "source": "Input-scrape", "sourceHandle": "url", "target": "HTTP-start-job", "targetHandle": "body"},
+      {"id": "e2", "source": "HTTP-start-job", "sourceHandle": "response", "target": "Python-poll", "targetHandle": "job_response"},
+      {"id": "e3", "source": "Python-poll", "sourceHandle": "result", "target": "Prompt-summary", "targetHandle": "scrape_result"},
+      {"id": "e4", "source": "Python-poll", "sourceHandle": "result", "target": "Output-raw", "targetHandle": "input_value"},
+      {"id": "e5", "source": "Prompt-summary", "sourceHandle": "prompt", "target": "LLM-summary", "targetHandle": "input_value"},
+      {"id": "e6", "source": "LLM-summary", "sourceHandle": "text", "target": "Output-result", "targetHandle": "input_value"}
+    ],
+
+    "viewport": {"zoom": 0.7, "x": 0, "y": 0}
+  },
+
+  "is_component": false,
+  "last_tested_version": "1.0",
+  "variables": [
+    {"name": "LANGFLOW_VIRTUAL_KEY", "type": "str", "value": "sk-autonomyx-langflow-prod"},
+    {"name": "SCRAPER_URL", "type": "str", "value": "http://playwright-scraper:8400"}
+  ],
+
+  "important_notes": [
+    "depth=0 → single page only (fastest)",
+    "depth=1 → page + all linked pages one level deep",
+    "depth=-1 → entire site (use max_pages to limit)",
+    "shm_size: 256m MUST be set in docker-compose — Chrome crashes without it",
+    "Embeddings use nomic-embed-text via Ollama (768 dimensions)",
+    "Structured extraction uses Qwen3-30B-A3B via gateway",
+    "Collection name returned for use in RAG queries via /query endpoint",
+    "To query after scraping: POST http://playwright-scraper:8400/query with {collection, query, top_k}"
+  ],
+
+  "api_example": {
+    "scrape": "curl -X POST https://flows.openautonomyx.com/api/v1/run/{flow_id} \\\n  -H 'Authorization: Bearer lf-your-key' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"url\": \"https://docs.example.com\", \"depth\": 1, \"max_pages\": 30}'",
+    "query_after": "curl -X POST http://playwright-scraper:8400/query \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"collection\": \"site_docs_example_com_abc123\", \"query\": \"how to authenticate\", \"top_k\": 5}'"
+  }
+}

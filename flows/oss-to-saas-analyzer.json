@@ -1,6 +1,6 @@
 {
-  "name": "Autonomyx Feature Gap Analyzer",
-  "description": "Compare any two enterprise software products across 8 dimensions. Returns scored matrix with advantages, gaps, and recommendation. Routes to Qwen3-30B-A3B for reasoning quality.",
+  "name": "Autonomyx OSS to SaaS Analyzer",
+  "description": "Score any OSS GitHub project across 5 commercial service archetypes. Returns scores, recommended mix, 90-day action plan, and risks. For evaluating open-source monetisation opportunities.",
   "data": {
     "nodes": [
       {
@@ -10,36 +10,28 @@
           "type": "TextInput",
           "node": {
             "template": {
-              "product_a": {
+              "github_repo": {
                 "type": "str",
                 "required": true,
-                "display_name": "Product A",
-                "placeholder": "e.g. Salesforce",
+                "display_name": "GitHub Repo",
+                "placeholder": "e.g. langfuse/langfuse or https://github.com/langfuse/langfuse",
                 "value": "",
                 "show": true
               },
-              "product_b": {
+              "target_market": {
                 "type": "str",
-                "required": true,
-                "display_name": "Product B",
-                "placeholder": "e.g. HubSpot",
+                "required": false,
+                "display_name": "Target Market",
+                "placeholder": "e.g. Indian SMEs, enterprise DevOps teams",
+                "value": "general",
+                "show": true
+              },
+              "context": {
+                "type": "str",
+                "required": false,
+                "display_name": "Your Context",
+                "placeholder": "e.g. We already run a managed hosting business",
                 "value": "",
-                "show": true
-              },
-              "category": {
-                "type": "str",
-                "required": false,
-                "display_name": "Category",
-                "placeholder": "e.g. CRM, HCM, BI",
-                "value": "auto-detect",
-                "show": true
-              },
-              "focus_areas": {
-                "type": "str",
-                "required": false,
-                "display_name": "Focus Areas",
-                "placeholder": "e.g. AI features, pricing, mobile",
-                "value": "all",
                 "show": true
               }
             },
@@ -60,7 +52,7 @@
             "template": {
               "template": {
                 "type": "str",
-                "value": "You are a senior enterprise software analyst. Compare the two products and return ONLY valid JSON.\n\nProduct A: {product_a}\nProduct B: {product_b}\nCategory: {category}\nFocus areas: {focus_areas}\n\nReturn this exact JSON structure:\n{{\n  \"product_a\": \"{product_a}\",\n  \"product_b\": \"{product_b}\",\n  \"category\": \"{category}\",\n  \"analysis_date\": \"<ISO date>\",\n  \"overall_winner\": \"A|B|tie\",\n  \"executive_summary\": \"3-4 sentence summary\",\n  \"scored_matrix\": [\n    {{\n      \"dimension\": \"AI/ML Capabilities\",\n      \"product_a_score\": <0-100>,\n      \"product_b_score\": <0-100>,\n      \"product_a_features\": [\"feature1\", \"feature2\"],\n      \"product_b_features\": [\"feature1\", \"feature2\"],\n      \"gap_direction\": \"A_leads|B_leads|parity\",\n      \"gap_significance\": \"critical|high|medium|low\"\n    }}\n  ],\n  \"dimensions_covered\": [\"Platform Features\",\"AI/ML\",\"API & Integrations\",\"Security & Compliance\",\"Pricing\",\"Support\",\"Mobile\",\"Reporting\"],\n  \"product_a_advantages\": [\"...\"],\n  \"product_b_advantages\": [\"...\"],\n  \"recommendation\": \"...\",\n  \"confidence\": \"high|medium|low\",\n  \"data_sources\": [\"Gartner Peer Insights\",\"G2\",\"Official documentation\",\"GitHub\"]\n}}\n\nAnalyse all 8 dimensions. Return ONLY JSON.",
+                "value": "You are an OSS commercialisation expert. Score this OSS project and return ONLY valid JSON.\n\nGitHub repo: {github_repo}\nTarget market: {target_market}\nExisting SaaS context: {context}\n\nScore across 5 service archetypes and return this exact JSON:\n{{\n  \"repo\": \"{github_repo}\",\n  \"analysis_date\": \"<ISO date>\",\n  \"project_summary\": \"What this OSS project does\",\n  \"licence\": \"MIT|Apache2|GPL|AGPL|BSL|other\",\n  \"commercial_friendly\": true/false,\n  \"github_stats\": {{\"stars\": \"...\", \"forks\": \"...\", \"contributors\": \"...\", \"last_commit\": \"...\"}},\n  \"archetypes\": {{\n    \"managed_hosting\": {{\"score\": <0-100>, \"rationale\": \"...\", \"revenue_model\": \"...\", \"effort\": \"low|medium|high\", \"examples\": [\"...\"]}},\n    \"api_service\": {{\"score\": <0-100>, \"rationale\": \"...\", \"revenue_model\": \"...\", \"effort\": \"low|medium|high\"}},\n    \"consulting_implementation\": {{\"score\": <0-100>, \"rationale\": \"...\", \"revenue_model\": \"...\", \"effort\": \"low|medium|high\"}},\n    \"managed_service_ops\": {{\"score\": <0-100>, \"rationale\": \"...\", \"revenue_model\": \"...\", \"effort\": \"low|medium|high\"}},\n    \"vertical_saas\": {{\"score\": <0-100>, \"rationale\": \"...\", \"revenue_model\": \"...\", \"effort\": \"low|medium|high\"}}\n  }},\n  \"recommended_mix\": [\"top 2 archetypes to pursue\"],\n  \"verdict\": \"Strongly Recommended|Recommended|Possible|Not Recommended\",\n  \"first_90_days\": [\"concrete action 1\", \"concrete action 2\", \"concrete action 3\"],\n  \"risks\": [\"licence risk\", \"competition risk\", \"technical risk\"]\n}}\n\nReturn ONLY JSON.",
                 "display_name": "Prompt",
                 "show": true
               }
@@ -107,7 +99,7 @@
               },
               "max_tokens": {
                 "type": "int",
-                "value": 6144,
+                "value": 4096,
                 "display_name": "Max Tokens",
                 "show": true
               },
@@ -118,7 +110,7 @@
                 "show": true
               }
             },
-            "display_name": "Qwen3-30B (Analyst)"
+            "display_name": "Qwen3-30B (OSS Analyst)"
           }
         },
         "position": {
@@ -136,11 +128,11 @@
               "input_value": {
                 "type": "str",
                 "required": true,
-                "display_name": "Gap Analysis",
+                "display_name": "OSS to SaaS Analysis",
                 "show": true
               }
             },
-            "display_name": "Gap Analysis"
+            "display_name": "OSS to SaaS Analysis"
           }
         },
         "position": {
@@ -153,30 +145,23 @@
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_a",
+        "sourceHandle": "github_repo",
         "target": "Prompt",
-        "targetHandle": "product_a"
+        "targetHandle": "github_repo"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_b",
+        "sourceHandle": "target_market",
         "target": "Prompt",
-        "targetHandle": "product_b"
+        "targetHandle": "target_market"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "category",
+        "sourceHandle": "context",
         "target": "Prompt",
-        "targetHandle": "category"
-      },
-      {
-        "id": "edge-Input-Prompt",
-        "source": "Input",
-        "sourceHandle": "focus_areas",
-        "target": "Prompt",
-        "targetHandle": "focus_areas"
+        "targetHandle": "context"
       },
       {
         "id": "edge-Prompt-LLM",

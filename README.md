@@ -58,12 +58,19 @@ Peak RAM: ~84GB. Runs on a 96GB VPS. No GPU required.
 
 ## Pre-built workflows (flows/)
 
-| Flow | Model used | What it does |
+| Flow | Model | What it does |
 |---|---|---|
-| `gateway-agent.json` | Qwen3-30B-A3B (recommended) | Language detect → recommend model → LLM → feedback capture |
-| `code-review.json` | Qwen2.5-Coder-32B (always) | Code review → structured JSON: bugs, security, style, score |
-| `policy-creator.json` | Qwen3-30B-A3B (always) | Generate Privacy Policy, ToS, Cookie Policy — DPDP 2023 aware |
-| `policy-review.json` | Qwen3-30B-A3B (always) | Analyse vendor policy → 5-domain risk report + actions |
+| `gateway-agent.json` | Qwen3-30B (recommended) | Language detect → recommend model → LLM → feedback capture |
+| `code-review.json` | Qwen2.5-Coder-32B | Code review → JSON: bugs, security, style, score |
+| `policy-creator.json` | Qwen3-30B | Generate Privacy Policy, ToS, Cookie Policy — DPDP 2023 |
+| `policy-review.json` | Qwen3-30B | Analyse vendor policy → 5-domain risk report + actions |
+| `feature-gap-analyzer.json` | Qwen3-30B | Compare two products across 8 dimensions → scored matrix |
+| `saas-evaluator.json` | Qwen3-30B | Multi-persona SaaS evaluation → scored JSON + recommendation |
+| `fraud-sentinel.json` | Qwen3-30B | Transaction fraud detection → ALLOW/WARN/BLOCK verdict |
+| `app-alternatives-finder.json` | Qwen3-30B | Find OSS + commercial alternatives → ranked list |
+| `saas-standardizer.json` | Qwen3-30B | Exhaustive SaaS product profile → 18-dimension JSON |
+| `oss-to-saas-analyzer.json` | Qwen3-30B | Score OSS project across 5 commercial archetypes |
+| `structured-data-parser.json` | Python only | Parse JSON/CSV/XML/YAML/Markdown → structured JSON (no LLM) |
 | `feature-gap-analyzer.json` | Qwen3-30B-A3B (always) | Compare 2-3 products → scored feature matrix + gaps + recommendation |
 | `structured-data-parser.json` | Qwen2.5-Coder-32B (always) | Any data sample → Python parser code + schema + tests |
 

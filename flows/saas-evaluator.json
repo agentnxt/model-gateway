@@ -1,6 +1,6 @@
 {
-  "name": "Autonomyx Feature Gap Analyzer",
-  "description": "Compare any two enterprise software products across 8 dimensions. Returns scored matrix with advantages, gaps, and recommendation. Routes to Qwen3-30B-A3B for reasoning quality.",
+  "name": "Autonomyx SaaS Evaluator",
+  "description": "Multi-persona enterprise SaaS evaluation. Input: product name, evaluator role, use case. Output: scored JSON across 8 dimensions with recommendation and next steps.",
   "data": {
     "nodes": [
       {
@@ -10,36 +10,36 @@
           "type": "TextInput",
           "node": {
             "template": {
-              "product_a": {
+              "product_name": {
                 "type": "str",
                 "required": true,
-                "display_name": "Product A",
-                "placeholder": "e.g. Salesforce",
+                "display_name": "Product Name",
+                "placeholder": "e.g. Notion, Jira, Salesforce",
                 "value": "",
                 "show": true
               },
-              "product_b": {
+              "persona": {
                 "type": "str",
-                "required": true,
-                "display_name": "Product B",
-                "placeholder": "e.g. HubSpot",
+                "required": false,
+                "display_name": "Evaluator Persona",
+                "placeholder": "CISO / CTO / Procurement / IT Admin / Dept Head",
+                "value": "CTO",
+                "show": true
+              },
+              "use_case": {
+                "type": "str",
+                "required": false,
+                "display_name": "Use Case",
+                "placeholder": "e.g. Project management for 50-person engineering team",
                 "value": "",
                 "show": true
               },
-              "category": {
+              "org_size": {
                 "type": "str",
                 "required": false,
-                "display_name": "Category",
-                "placeholder": "e.g. CRM, HCM, BI",
-                "value": "auto-detect",
-                "show": true
-              },
-              "focus_areas": {
-                "type": "str",
-                "required": false,
-                "display_name": "Focus Areas",
-                "placeholder": "e.g. AI features, pricing, mobile",
-                "value": "all",
+                "display_name": "Organisation Size",
+                "placeholder": "e.g. 50-person startup / 500-person enterprise",
+                "value": "50-500 employees",
                 "show": true
               }
             },
@@ -60,7 +60,7 @@
             "template": {
               "template": {
                 "type": "str",
-                "value": "You are a senior enterprise software analyst. Compare the two products and return ONLY valid JSON.\n\nProduct A: {product_a}\nProduct B: {product_b}\nCategory: {category}\nFocus areas: {focus_areas}\n\nReturn this exact JSON structure:\n{{\n  \"product_a\": \"{product_a}\",\n  \"product_b\": \"{product_b}\",\n  \"category\": \"{category}\",\n  \"analysis_date\": \"<ISO date>\",\n  \"overall_winner\": \"A|B|tie\",\n  \"executive_summary\": \"3-4 sentence summary\",\n  \"scored_matrix\": [\n    {{\n      \"dimension\": \"AI/ML Capabilities\",\n      \"product_a_score\": <0-100>,\n      \"product_b_score\": <0-100>,\n      \"product_a_features\": [\"feature1\", \"feature2\"],\n      \"product_b_features\": [\"feature1\", \"feature2\"],\n      \"gap_direction\": \"A_leads|B_leads|parity\",\n      \"gap_significance\": \"critical|high|medium|low\"\n    }}\n  ],\n  \"dimensions_covered\": [\"Platform Features\",\"AI/ML\",\"API & Integrations\",\"Security & Compliance\",\"Pricing\",\"Support\",\"Mobile\",\"Reporting\"],\n  \"product_a_advantages\": [\"...\"],\n  \"product_b_advantages\": [\"...\"],\n  \"recommendation\": \"...\",\n  \"confidence\": \"high|medium|low\",\n  \"data_sources\": [\"Gartner Peer Insights\",\"G2\",\"Official documentation\",\"GitHub\"]\n}}\n\nAnalyse all 8 dimensions. Return ONLY JSON.",
+                "value": "You are an enterprise SaaS evaluation expert. Evaluate the product and return ONLY valid JSON.\n\nProduct: {product_name}\nEvaluator persona: {persona}\nUse case: {use_case}\nOrganisation size: {org_size}\n\nReturn this exact JSON structure:\n{{\n  \"product\": \"{product_name}\",\n  \"persona\": \"{persona}\",\n  \"evaluation_date\": \"<ISO date>\",\n  \"overall_score\": <0-100>,\n  \"recommendation\": \"Strongly Recommend|Recommend|Evaluate Further|Do Not Recommend\",\n  \"dimensions\": {{\n    \"features\": {{\"score\": <0-100>, \"findings\": [\"...\"], \"gaps\": [\"...\"]}},\n    \"ai_ml\": {{\"score\": <0-100>, \"findings\": [\"...\"], \"gaps\": [\"...\"]}},\n    \"security_compliance\": {{\"score\": <0-100>, \"certifications\": [\"SOC2\",\"ISO27001\",\"GDPR\"], \"findings\": [\"...\"]}},\n    \"api_integrations\": {{\"score\": <0-100>, \"findings\": [\"...\"], \"gaps\": [\"...\"]}},\n    \"pricing\": {{\"score\": <0-100>, \"model\": \"...\", \"findings\": [\"...\"]}},\n    \"support_sla\": {{\"score\": <0-100>, \"findings\": [\"...\"]}},\n    \"vendor_health\": {{\"score\": <0-100>, \"funding\": \"...\", \"employees\": \"...\", \"findings\": [\"...\"]}},\n    \"user_sentiment\": {{\"score\": <0-100>, \"g2_rating\": \"...\", \"findings\": [\"...\"]}}\n  }},\n  \"strengths\": [\"...\"],\n  \"weaknesses\": [\"...\"],\n  \"alternatives\": [\"competitor1\", \"competitor2\"],\n  \"questions_for_vendor\": [\"...\"],\n  \"next_steps\": [\"...\"]\n}}\n\nBe thorough. Return ONLY JSON.",
                 "display_name": "Prompt",
                 "show": true
               }
@@ -118,7 +118,7 @@
                 "show": true
               }
             },
-            "display_name": "Qwen3-30B (Analyst)"
+            "display_name": "Qwen3-30B (Evaluator)"
           }
         },
         "position": {
@@ -136,11 +136,11 @@
               "input_value": {
                 "type": "str",
                 "required": true,
-                "display_name": "Gap Analysis",
+                "display_name": "SaaS Evaluation",
                 "show": true
               }
             },
-            "display_name": "Gap Analysis"
+            "display_name": "SaaS Evaluation"
           }
         },
         "position": {
@@ -153,30 +153,30 @@
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_a",
+        "sourceHandle": "product_name",
         "target": "Prompt",
-        "targetHandle": "product_a"
+        "targetHandle": "product_name"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_b",
+        "sourceHandle": "persona",
         "target": "Prompt",
-        "targetHandle": "product_b"
+        "targetHandle": "persona"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "category",
+        "sourceHandle": "use_case",
         "target": "Prompt",
-        "targetHandle": "category"
+        "targetHandle": "use_case"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "focus_areas",
+        "sourceHandle": "org_size",
         "target": "Prompt",
-        "targetHandle": "focus_areas"
+        "targetHandle": "org_size"
       },
       {
         "id": "edge-Prompt-LLM",

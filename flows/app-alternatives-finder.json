@@ -1,6 +1,6 @@
 {
-  "name": "Autonomyx Feature Gap Analyzer",
-  "description": "Compare any two enterprise software products across 8 dimensions. Returns scored matrix with advantages, gaps, and recommendation. Routes to Qwen3-30B-A3B for reasoning quality.",
+  "name": "Autonomyx App Alternatives Finder",
+  "description": "Find OSS and commercial alternatives to any software product. Returns ranked list with feature overlap, licence, pricing, and self-hostable flag.",
   "data": {
     "nodes": [
       {
@@ -10,19 +10,11 @@
           "type": "TextInput",
           "node": {
             "template": {
-              "product_a": {
+              "product_name": {
                 "type": "str",
                 "required": true,
-                "display_name": "Product A",
-                "placeholder": "e.g. Salesforce",
-                "value": "",
-                "show": true
-              },
-              "product_b": {
-                "type": "str",
-                "required": true,
-                "display_name": "Product B",
-                "placeholder": "e.g. HubSpot",
+                "display_name": "Product Name",
+                "placeholder": "e.g. Notion, Airtable, Salesforce",
                 "value": "",
                 "show": true
               },
@@ -30,16 +22,24 @@
                 "type": "str",
                 "required": false,
                 "display_name": "Category",
-                "placeholder": "e.g. CRM, HCM, BI",
+                "placeholder": "e.g. project management, CRM \u2014 auto-detect if empty",
                 "value": "auto-detect",
                 "show": true
               },
-              "focus_areas": {
+              "preference": {
                 "type": "str",
                 "required": false,
-                "display_name": "Focus Areas",
-                "placeholder": "e.g. AI features, pricing, mobile",
-                "value": "all",
+                "display_name": "Preference",
+                "placeholder": "open-source only / commercial / any",
+                "value": "any",
+                "show": true
+              },
+              "max_results": {
+                "type": "str",
+                "required": false,
+                "display_name": "Max Results",
+                "placeholder": "",
+                "value": "10",
                 "show": true
               }
             },
@@ -60,7 +60,7 @@
             "template": {
               "template": {
                 "type": "str",
-                "value": "You are a senior enterprise software analyst. Compare the two products and return ONLY valid JSON.\n\nProduct A: {product_a}\nProduct B: {product_b}\nCategory: {category}\nFocus areas: {focus_areas}\n\nReturn this exact JSON structure:\n{{\n  \"product_a\": \"{product_a}\",\n  \"product_b\": \"{product_b}\",\n  \"category\": \"{category}\",\n  \"analysis_date\": \"<ISO date>\",\n  \"overall_winner\": \"A|B|tie\",\n  \"executive_summary\": \"3-4 sentence summary\",\n  \"scored_matrix\": [\n    {{\n      \"dimension\": \"AI/ML Capabilities\",\n      \"product_a_score\": <0-100>,\n      \"product_b_score\": <0-100>,\n      \"product_a_features\": [\"feature1\", \"feature2\"],\n      \"product_b_features\": [\"feature1\", \"feature2\"],\n      \"gap_direction\": \"A_leads|B_leads|parity\",\n      \"gap_significance\": \"critical|high|medium|low\"\n    }}\n  ],\n  \"dimensions_covered\": [\"Platform Features\",\"AI/ML\",\"API & Integrations\",\"Security & Compliance\",\"Pricing\",\"Support\",\"Mobile\",\"Reporting\"],\n  \"product_a_advantages\": [\"...\"],\n  \"product_b_advantages\": [\"...\"],\n  \"recommendation\": \"...\",\n  \"confidence\": \"high|medium|low\",\n  \"data_sources\": [\"Gartner Peer Insights\",\"G2\",\"Official documentation\",\"GitHub\"]\n}}\n\nAnalyse all 8 dimensions. Return ONLY JSON.",
+                "value": "You are an expert software analyst. Find alternatives to the given product and return ONLY valid JSON.\n\nProduct: {product_name}\nCategory hint: {category}\nPreference: {preference}\nMax results: {max_results}\n\nReturn this exact JSON structure:\n{{\n  \"product\": \"{product_name}\",\n  \"detected_category\": \"...\",\n  \"analysis_date\": \"<ISO date>\",\n  \"alternatives\": [\n    {{\n      \"name\": \"...\",\n      \"url\": \"https://...\",\n      \"category\": \"...\",\n      \"licence\": \"Open Source|Commercial|Freemium|Free\",\n      \"self_hostable\": true/false,\n      \"feature_overlap\": <0-100>,\n      \"key_differences\": [\"...\"],\n      \"best_for\": \"...\",\n      \"pricing_summary\": \"...\",\n      \"github_stars\": \"...\",\n      \"sources\": [\"AlternativeTo\", \"G2\", \"Gartner\", \"Official site\"]\n    }}\n  ],\n  \"open_source_picks\": [\"top OSS alternatives\"],\n  \"commercial_picks\": [\"top commercial alternatives\"],\n  \"recommendation\": \"Best overall alternative and why\"\n}}\n\nSource from: official websites, AlternativeTo, G2, Gartner Peer Insights, OpenSourceAlternatives.to\nReturn ONLY JSON.",
                 "display_name": "Prompt",
                 "show": true
               }
@@ -107,7 +107,7 @@
               },
               "max_tokens": {
                 "type": "int",
-                "value": 6144,
+                "value": 4096,
                 "display_name": "Max Tokens",
                 "show": true
               },
@@ -118,7 +118,7 @@
                 "show": true
               }
             },
-            "display_name": "Qwen3-30B (Analyst)"
+            "display_name": "Qwen3-30B (Researcher)"
           }
         },
         "position": {
@@ -136,11 +136,11 @@
               "input_value": {
                 "type": "str",
                 "required": true,
-                "display_name": "Gap Analysis",
+                "display_name": "Alternatives",
                 "show": true
               }
             },
-            "display_name": "Gap Analysis"
+            "display_name": "Alternatives"
           }
         },
         "position": {
@@ -153,16 +153,9 @@
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_a",
+        "sourceHandle": "product_name",
         "target": "Prompt",
-        "targetHandle": "product_a"
-      },
-      {
-        "id": "edge-Input-Prompt",
-        "source": "Input",
-        "sourceHandle": "product_b",
-        "target": "Prompt",
-        "targetHandle": "product_b"
+        "targetHandle": "product_name"
       },
       {
         "id": "edge-Input-Prompt",
@@ -174,9 +167,16 @@
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "focus_areas",
+        "sourceHandle": "preference",
         "target": "Prompt",
-        "targetHandle": "focus_areas"
+        "targetHandle": "preference"
+      },
+      {
+        "id": "edge-Input-Prompt",
+        "source": "Input",
+        "sourceHandle": "max_results",
+        "target": "Prompt",
+        "targetHandle": "max_results"
       },
       {
         "id": "edge-Prompt-LLM",

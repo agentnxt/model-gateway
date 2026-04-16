@@ -1,6 +1,6 @@
 {
-  "name": "Autonomyx Feature Gap Analyzer",
-  "description": "Compare any two enterprise software products across 8 dimensions. Returns scored matrix with advantages, gaps, and recommendation. Routes to Qwen3-30B-A3B for reasoning quality.",
+  "name": "Autonomyx Fraud Sentinel",
+  "description": "Real-time fraud detection and scoring. Detects 7 patterns. Returns ALLOW/WARN/STRONG_WARN/BLOCK verdict with evidence. DPDP 2023 compliant \u2014 zero PII stored.",
   "data": {
     "nodes": [
       {
@@ -10,36 +10,28 @@
           "type": "TextInput",
           "node": {
             "template": {
-              "product_a": {
+              "transaction_details": {
                 "type": "str",
                 "required": true,
-                "display_name": "Product A",
-                "placeholder": "e.g. Salesforce",
+                "display_name": "Transaction Details",
+                "placeholder": "Amount, recipient, payment method, time, device, location",
                 "value": "",
                 "show": true
               },
-              "product_b": {
+              "platform_context": {
                 "type": "str",
-                "required": true,
-                "display_name": "Product B",
-                "placeholder": "e.g. HubSpot",
+                "required": false,
+                "display_name": "Platform Context",
+                "placeholder": "e.g. e-commerce checkout, P2P transfer, subscription renewal",
                 "value": "",
                 "show": true
               },
-              "category": {
+              "user_history": {
                 "type": "str",
                 "required": false,
-                "display_name": "Category",
-                "placeholder": "e.g. CRM, HCM, BI",
-                "value": "auto-detect",
-                "show": true
-              },
-              "focus_areas": {
-                "type": "str",
-                "required": false,
-                "display_name": "Focus Areas",
-                "placeholder": "e.g. AI features, pricing, mobile",
-                "value": "all",
+                "display_name": "User History Hint",
+                "placeholder": "e.g. first transaction, 3yr account, recent password reset",
+                "value": "",
                 "show": true
               }
             },
@@ -60,7 +52,7 @@
             "template": {
               "template": {
                 "type": "str",
-                "value": "You are a senior enterprise software analyst. Compare the two products and return ONLY valid JSON.\n\nProduct A: {product_a}\nProduct B: {product_b}\nCategory: {category}\nFocus areas: {focus_areas}\n\nReturn this exact JSON structure:\n{{\n  \"product_a\": \"{product_a}\",\n  \"product_b\": \"{product_b}\",\n  \"category\": \"{category}\",\n  \"analysis_date\": \"<ISO date>\",\n  \"overall_winner\": \"A|B|tie\",\n  \"executive_summary\": \"3-4 sentence summary\",\n  \"scored_matrix\": [\n    {{\n      \"dimension\": \"AI/ML Capabilities\",\n      \"product_a_score\": <0-100>,\n      \"product_b_score\": <0-100>,\n      \"product_a_features\": [\"feature1\", \"feature2\"],\n      \"product_b_features\": [\"feature1\", \"feature2\"],\n      \"gap_direction\": \"A_leads|B_leads|parity\",\n      \"gap_significance\": \"critical|high|medium|low\"\n    }}\n  ],\n  \"dimensions_covered\": [\"Platform Features\",\"AI/ML\",\"API & Integrations\",\"Security & Compliance\",\"Pricing\",\"Support\",\"Mobile\",\"Reporting\"],\n  \"product_a_advantages\": [\"...\"],\n  \"product_b_advantages\": [\"...\"],\n  \"recommendation\": \"...\",\n  \"confidence\": \"high|medium|low\",\n  \"data_sources\": [\"Gartner Peer Insights\",\"G2\",\"Official documentation\",\"GitHub\"]\n}}\n\nAnalyse all 8 dimensions. Return ONLY JSON.",
+                "value": "You are Autonomyx Fraud Sentinel, an expert fraud detection system. Analyse the transaction and return ONLY valid JSON.\n\nTransaction details: {transaction_details}\nPlatform context: {platform_context}\nUser history hint: {user_history}\n\nDetect these 7 patterns: scarcity manipulation, dormant identity resurrection, velocity spikes, new device anomalies, bad actor networks, time-of-day anomalies, low-value probe transactions.\n\nReturn this exact JSON structure:\n{{\n  \"transaction_id\": \"<generated UUID>\",\n  \"verdict\": \"ALLOW|WARN|STRONG_WARN|BLOCK\",\n  \"risk_score\": <0-100>,\n  \"analysis_time_ms\": <integer>,\n  \"identity_risk\": \"LOW|MEDIUM|HIGH|CRITICAL\",\n  \"patterns_detected\": [\n    {{\"pattern\": \"...\", \"confidence\": <0-100>, \"evidence\": \"...\"}}\n  ],\n  \"signals\": {{\n    \"scarcity_manipulation\": false,\n    \"dormant_identity\": false,\n    \"velocity_spike\": false,\n    \"new_device_anomaly\": false,\n    \"bad_actor_network\": false,\n    \"time_anomaly\": false,\n    \"probe_transaction\": false\n  }},\n  \"recommended_action\": \"...\",\n  \"citizen_safety_note\": \"Plain English explanation safe to share with end user\",\n  \"evidence_for_claim\": \"Reference ID usable for cybercrime.gov.in or bank dispute\",\n  \"dpdp_compliant\": true,\n  \"pii_stored\": false\n}}\n\nFlag on IDENTITY RISK not amount \u2014 \u20b91 to a suspicious identity must be flagged.\nReturn ONLY JSON.",
                 "display_name": "Prompt",
                 "show": true
               }
@@ -101,13 +93,13 @@
               },
               "temperature": {
                 "type": "float",
-                "value": 0.1,
+                "value": 0.05,
                 "display_name": "Temperature",
                 "show": true
               },
               "max_tokens": {
                 "type": "int",
-                "value": 6144,
+                "value": 2048,
                 "display_name": "Max Tokens",
                 "show": true
               },
@@ -118,7 +110,7 @@
                 "show": true
               }
             },
-            "display_name": "Qwen3-30B (Analyst)"
+            "display_name": "Qwen3-30B (Sentinel)"
           }
         },
         "position": {
@@ -136,11 +128,11 @@
               "input_value": {
                 "type": "str",
                 "required": true,
-                "display_name": "Gap Analysis",
+                "display_name": "Fraud Analysis",
                 "show": true
               }
             },
-            "display_name": "Gap Analysis"
+            "display_name": "Fraud Analysis"
           }
         },
         "position": {
@@ -153,30 +145,23 @@
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_a",
+        "sourceHandle": "transaction_details",
         "target": "Prompt",
-        "targetHandle": "product_a"
+        "targetHandle": "transaction_details"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_b",
+        "sourceHandle": "platform_context",
         "target": "Prompt",
-        "targetHandle": "product_b"
+        "targetHandle": "platform_context"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "category",
+        "sourceHandle": "user_history",
         "target": "Prompt",
-        "targetHandle": "category"
-      },
-      {
-        "id": "edge-Input-Prompt",
-        "source": "Input",
-        "sourceHandle": "focus_areas",
-        "target": "Prompt",
-        "targetHandle": "focus_areas"
+        "targetHandle": "user_history"
       },
       {
         "id": "edge-Prompt-LLM",
@@ -207,5 +192,10 @@
       "type": "str",
       "value": "sk-autonomyx-langflow-prod"
     }
+  ],
+  "important_notes": [
+    "Zero PII stored \u2014 transaction_id is generated, not linked to user identity",
+    "Citizen Safety Check: share citizen_safety_note with end user safely",
+    "evidence_for_claim usable as reference for cybercrime.gov.in or bank disputes"
   ]
 }

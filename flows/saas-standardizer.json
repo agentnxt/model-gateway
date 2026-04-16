@@ -1,6 +1,6 @@
 {
-  "name": "Autonomyx Feature Gap Analyzer",
-  "description": "Compare any two enterprise software products across 8 dimensions. Returns scored matrix with advantages, gaps, and recommendation. Routes to Qwen3-30B-A3B for reasoning quality.",
+  "name": "Autonomyx SaaS Standardizer",
+  "description": "Produce exhaustive standardised SaaS product profiles across 18 dimensions. Input: product name. Output: JSON profile covering features, pricing, security, API, integrations, funding, analyst rankings.",
   "data": {
     "nodes": [
       {
@@ -10,35 +10,19 @@
           "type": "TextInput",
           "node": {
             "template": {
-              "product_a": {
+              "product_name": {
                 "type": "str",
                 "required": true,
-                "display_name": "Product A",
-                "placeholder": "e.g. Salesforce",
+                "display_name": "Product Name",
+                "placeholder": "e.g. Linear, Figma, Supabase",
                 "value": "",
                 "show": true
               },
-              "product_b": {
-                "type": "str",
-                "required": true,
-                "display_name": "Product B",
-                "placeholder": "e.g. HubSpot",
-                "value": "",
-                "show": true
-              },
-              "category": {
+              "dimensions": {
                 "type": "str",
                 "required": false,
-                "display_name": "Category",
-                "placeholder": "e.g. CRM, HCM, BI",
-                "value": "auto-detect",
-                "show": true
-              },
-              "focus_areas": {
-                "type": "str",
-                "required": false,
-                "display_name": "Focus Areas",
-                "placeholder": "e.g. AI features, pricing, mobile",
+                "display_name": "Dimensions",
+                "placeholder": "all / pricing,security,api / custom",
                 "value": "all",
                 "show": true
               }
@@ -60,7 +44,7 @@
             "template": {
               "template": {
                 "type": "str",
-                "value": "You are a senior enterprise software analyst. Compare the two products and return ONLY valid JSON.\n\nProduct A: {product_a}\nProduct B: {product_b}\nCategory: {category}\nFocus areas: {focus_areas}\n\nReturn this exact JSON structure:\n{{\n  \"product_a\": \"{product_a}\",\n  \"product_b\": \"{product_b}\",\n  \"category\": \"{category}\",\n  \"analysis_date\": \"<ISO date>\",\n  \"overall_winner\": \"A|B|tie\",\n  \"executive_summary\": \"3-4 sentence summary\",\n  \"scored_matrix\": [\n    {{\n      \"dimension\": \"AI/ML Capabilities\",\n      \"product_a_score\": <0-100>,\n      \"product_b_score\": <0-100>,\n      \"product_a_features\": [\"feature1\", \"feature2\"],\n      \"product_b_features\": [\"feature1\", \"feature2\"],\n      \"gap_direction\": \"A_leads|B_leads|parity\",\n      \"gap_significance\": \"critical|high|medium|low\"\n    }}\n  ],\n  \"dimensions_covered\": [\"Platform Features\",\"AI/ML\",\"API & Integrations\",\"Security & Compliance\",\"Pricing\",\"Support\",\"Mobile\",\"Reporting\"],\n  \"product_a_advantages\": [\"...\"],\n  \"product_b_advantages\": [\"...\"],\n  \"recommendation\": \"...\",\n  \"confidence\": \"high|medium|low\",\n  \"data_sources\": [\"Gartner Peer Insights\",\"G2\",\"Official documentation\",\"GitHub\"]\n}}\n\nAnalyse all 8 dimensions. Return ONLY JSON.",
+                "value": "You are a SaaS research analyst. Produce an exhaustive standardised profile and return ONLY valid JSON.\n\nProduct: {product_name}\nDimensions requested: {dimensions}\n\nReturn this exact JSON structure:\n{{\n  \"product\": \"{product_name}\",\n  \"profile_date\": \"<ISO date>\",\n  \"summary\": \"2-3 sentence product summary\",\n  \"features\": [\"key feature 1\", \"key feature 2\"],\n  \"use_cases\": {{\"developer\": [\"...\"], \"manager\": [\"...\"], \"enterprise\": [\"...\"]}},\n  \"login_methods\": [\"SSO\", \"Email\", \"Google\", \"GitHub\"],\n  \"api\": {{\"available\": true/false, \"type\": \"REST|GraphQL|both\", \"docs_url\": \"...\", \"rate_limits\": \"...\"}},\n  \"integrations\": [\"Slack\", \"Zapier\", \"...\"],\n  \"pricing\": {{\"model\": \"per-seat|usage|flat|freemium\", \"free_tier\": true/false, \"starting_price\": \"...\", \"enterprise\": true/false}},\n  \"security\": {{\"soc2\": true/false, \"gdpr\": true/false, \"dpdp\": true/false, \"sso\": true/false, \"encryption_at_rest\": true/false}},\n  \"support\": {{\"channels\": [\"email\",\"chat\",\"phone\"], \"sla\": \"...\", \"enterprise_support\": true/false}},\n  \"open_source\": {{\"is_oss\": true/false, \"licence\": \"...\", \"github_url\": \"...\", \"github_stars\": \"...\"}},\n  \"funding\": {{\"stage\": \"...\", \"total_raised\": \"...\", \"investors\": [\"...\"]}},\n  \"analyst_rankings\": {{\"g2_rating\": \"...\", \"g2_reviews\": \"...\", \"gartner_peer_rating\": \"...\"}},\n  \"community_sentiment\": \"Brief summary of Reddit/HN/community opinion\",\n  \"notable_clients\": [\"...\"],\n  \"competitors\": [\"...\"]\n}}\n\nBe exhaustive. Return ONLY JSON.",
                 "display_name": "Prompt",
                 "show": true
               }
@@ -118,7 +102,7 @@
                 "show": true
               }
             },
-            "display_name": "Qwen3-30B (Analyst)"
+            "display_name": "Qwen3-30B (Profiler)"
           }
         },
         "position": {
@@ -136,11 +120,11 @@
               "input_value": {
                 "type": "str",
                 "required": true,
-                "display_name": "Gap Analysis",
+                "display_name": "SaaS Profile",
                 "show": true
               }
             },
-            "display_name": "Gap Analysis"
+            "display_name": "SaaS Profile"
           }
         },
         "position": {
@@ -153,30 +137,16 @@
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_a",
+        "sourceHandle": "product_name",
         "target": "Prompt",
-        "targetHandle": "product_a"
+        "targetHandle": "product_name"
       },
       {
         "id": "edge-Input-Prompt",
         "source": "Input",
-        "sourceHandle": "product_b",
+        "sourceHandle": "dimensions",
         "target": "Prompt",
-        "targetHandle": "product_b"
-      },
-      {
-        "id": "edge-Input-Prompt",
-        "source": "Input",
-        "sourceHandle": "category",
-        "target": "Prompt",
-        "targetHandle": "category"
-      },
-      {
-        "id": "edge-Input-Prompt",
-        "source": "Input",
-        "sourceHandle": "focus_areas",
-        "target": "Prompt",
-        "targetHandle": "focus_areas"
+        "targetHandle": "dimensions"
       },
       {
         "id": "edge-Prompt-LLM",

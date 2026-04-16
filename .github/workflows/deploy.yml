@@ -1,0 +1,39 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to vps.openautonomyx.com
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: vps.openautonomyx.com
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          timeout: 300s
+          script: |
+            set -e
+
+            cd /home/ubuntu/autonomyx-model-gateway
+
+            echo "=== Pulling latest code ==="
+            git pull origin main
+
+            echo "=== Updating compose file ==="
+            # Ensure no version attribute
+            sed -i '/^version:/d' docker-compose.yml
+
+            echo "=== Starting services ==="
+            docker compose up -d --build --remove-orphans
+
+            echo "=== Service status ==="
+            docker compose ps
+
+            echo "=== Deploy complete ==="

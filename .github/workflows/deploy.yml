@@ -24,7 +24,8 @@ jobs:
             cd /home/ubuntu/autonomyx-model-gateway
 
             echo "=== Pulling latest code ==="
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "=== Updating compose file ==="
             # Ensure no version attribute

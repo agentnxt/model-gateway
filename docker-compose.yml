@@ -13,6 +13,8 @@ volumes:
   langflow-data:
   langflow-db-data:
   ollama-data:
+  glitchtip-db-data:
+  glitchtip-uploads:
 
 services:
 
@@ -233,5 +235,92 @@ services:
         limits:
           memory: 2g
           cpus: '1.0'
+    labels:
+      - "traefik.enable=false"
+
+  # ── GlitchTip (error tracking) ────────────────────────────────────────────
+  glitchtip:
+    image: glitchtip/glitchtip:v6.0.10
+    container_name: autonomyx-glitchtip
+    restart: always
+    networks:
+      - coolify
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+      glitchtip-redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip
+      - REDIS_URL=redis://glitchtip-redis:6379/0
+      - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
+      - PORT=8000
+      - GLITCHTIP_DOMAIN=https://errors.openautonomyx.com
+      - DEFAULT_FROM_EMAIL=errors@openautonomyx.com
+      - CELERY_WORKER_AUTOSCALE=1,3
+      - CELERY_WORKER_MAX_TASKS_PER_CHILD=10000
+      - ENABLE_USER_REGISTRATION=False
+      - ENABLE_ORGANIZATION_CREATION=False
+    volumes:
+      - glitchtip-uploads:/code/uploads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.glitchtip.rule=Host(`errors.openautonomyx.com`)"
+      - "traefik.http.routers.glitchtip.entrypoints=https"
+      - "traefik.http.routers.glitchtip.tls.certresolver=letsencrypt"
+      - "traefik.http.services.glitchtip.loadbalancer.server.port=8000"
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:v6.0.10
+    container_name: autonomyx-glitchtip-worker
+    restart: always
+    networks:
+      - coolify
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+      glitchtip-redis:
+        condition: service_healthy
+    command: ./bin/run-celery-with-beat.sh
+    environment:
+      - DATABASE_URL=postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip
+      - REDIS_URL=redis://glitchtip-redis:6379/0
+      - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
+      - CELERY_WORKER_AUTOSCALE=1,3
+      - CELERY_WORKER_MAX_TASKS_PER_CHILD=10000
+    labels:
+      - "traefik.enable=false"
+
+  glitchtip-db:
+    image: postgres:15.7-alpine
+    container_name: autonomyx-glitchtip-db
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - POSTGRES_USER=glitchtip
+      - POSTGRES_PASSWORD=${GLITCHTIP_DB_PASSWORD}
+      - POSTGRES_DB=glitchtip
+    volumes:
+      - glitchtip-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+  glitchtip-redis:
+    image: redis:7.2-alpine
+    container_name: autonomyx-glitchtip-redis
+    restart: always
+    networks:
+      - coolify
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     labels:
       - "traefik.enable=false"

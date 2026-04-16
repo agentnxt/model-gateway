@@ -149,3 +149,49 @@ class TestEnvExample:
         # Should never contain real-looking keys
         assert "sk-" not in content or "YOUR" in content, \
             "Possible real API key in .env.example"
+
+
+class TestGlitchTip:
+
+    def setup_method(self):
+        with open(os.path.join(ROOT, "docker-compose.yml")) as f:
+            self.compose = yaml.safe_load(f)
+
+    def test_glitchtip_services_present(self):
+        services = self.compose.get("services", {})
+        for svc in ["glitchtip", "glitchtip-worker", "glitchtip-db", "glitchtip-redis"]:
+            assert svc in services, f"Missing GlitchTip service: {svc}"
+
+    def test_glitchtip_version_pinned(self):
+        image = self.compose["services"]["glitchtip"]["image"]
+        assert "latest" not in image, "GlitchTip image must be pinned, not :latest"
+        assert "v6.0.10" in image
+
+    def test_glitchtip_worker_uses_same_version(self):
+        web = self.compose["services"]["glitchtip"]["image"]
+        worker = self.compose["services"]["glitchtip-worker"]["image"]
+        assert web == worker, "glitchtip and glitchtip-worker must use same image version"
+
+    def test_glitchtip_traefik_label(self):
+        labels = self.compose["services"]["glitchtip"].get("labels", [])
+        label_str = " ".join(str(l) for l in labels)
+        assert "errors.openautonomyx.com" in label_str
+
+    def test_glitchtip_db_health_check(self):
+        db = self.compose["services"]["glitchtip-db"]
+        assert "healthcheck" in db
+
+    def test_glitchtip_redis_health_check(self):
+        redis = self.compose["services"]["glitchtip-redis"]
+        assert "healthcheck" in redis
+
+    def test_glitchtip_volumes_defined(self):
+        volumes = self.compose.get("volumes", {})
+        assert "glitchtip-db-data" in volumes
+        assert "glitchtip-uploads" in volumes
+
+    def test_glitchtip_env_vars_in_example(self):
+        with open(os.path.join(ROOT, ".env.example")) as f:
+            content = f.read()
+        assert "GLITCHTIP_SECRET_KEY" in content
+        assert "GLITCHTIP_DB_PASSWORD" in content

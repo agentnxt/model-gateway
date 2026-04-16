@@ -100,10 +100,11 @@ write_key "DATABASE_URL" \
   "postgresql://litellm:$(hex 16)@litellm-db:5432/litellm" \
   "postgres DSN with random password"
 
-# ── Postgres (LiteLLM DB) ─────────────────────────────────────────────────────
+# ── Postgres (shared instance — superuser + per-app passwords) ──────────────
 echo ""
-echo "── Postgres (LiteLLM) ───────────────────────────────────"
-write_key "POSTGRES_PASSWORD"    "$(hex 16)"            "hex 32"
+echo "── Postgres (shared) ───────────────────────────────────"
+write_key "POSTGRES_ROOT_PASSWORD" "$(hex 32)"           "hex 64 (superuser)"
+write_key "POSTGRES_PASSWORD"      "$(hex 16)"           "hex 32 (litellm app)"
 
 # ── Langflow ─────────────────────────────────────────────────────────────────
 echo ""

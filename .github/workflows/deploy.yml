@@ -11,9 +11,9 @@ env:
 
 jobs:
 
-  # ── Job 1: Test ────────────────────────────────────────────────────────────
+  # ── Job 1: Test + Lint ─────────────────────────────────────────────────────
   test:
-    name: Run Tests
+    name: Test & Lint
     runs-on: ubuntu-latest
 
     steps:
@@ -36,25 +36,35 @@ jobs:
           docker compose config --quiet
           echo "docker-compose.yml syntax OK"
 
+      - name: Lint Dockerfiles with hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: playwright/Dockerfile
+          failure-threshold: error
+
+      - name: Lint classifier Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: classifier/Dockerfile
+          failure-threshold: error
+
+      - name: Lint translator Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: translator/Dockerfile
+          failure-threshold: error
+
   # ── Job 2: Build & Push Docker images ─────────────────────────────────────
   build:
     name: Build & Push Images
     runs-on: ubuntu-latest
     needs: test
-    timeout-minutes: 60
 
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          df -h /
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -78,8 +88,8 @@ jobs:
           tags: |
             ${{ env.ORG }}/autonomyx-playwright:${{ steps.meta.outputs.version }}
             ${{ env.ORG }}/autonomyx-playwright:latest
-          cache-from: type=gha,scope=playwright
-          cache-to: type=gha,mode=max,scope=playwright
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           platforms: linux/amd64
 
       - name: Build & push classifier
@@ -91,13 +101,12 @@ jobs:
           tags: |
             ${{ env.ORG }}/autonomyx-classifier:${{ steps.meta.outputs.version }}
             ${{ env.ORG }}/autonomyx-classifier:latest
-          cache-from: type=gha,scope=classifier
-          cache-to: type=gha,mode=max,scope=classifier
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           platforms: linux/amd64
 
       - name: Build & push translator
         uses: docker/build-push-action@v5
-        timeout-minutes: 45
         with:
           context: ./translator
           dockerfile: ./translator/Dockerfile
@@ -105,8 +114,8 @@ jobs:
           tags: |
             ${{ env.ORG }}/autonomyx-translator:${{ steps.meta.outputs.version }}
             ${{ env.ORG }}/autonomyx-translator:latest
-          cache-from: type=gha,scope=translator
-          cache-to: type=gha,mode=max,scope=translator
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           platforms: linux/amd64
 
   # ── Job 3: Deploy ──────────────────────────────────────────────────────────
@@ -114,7 +123,6 @@ jobs:
     name: Deploy to vps.openautonomyx.com
     runs-on: ubuntu-latest
     needs: build
-    timeout-minutes: 30
 
     steps:
       - name: Deploy via SSH
@@ -137,12 +145,12 @@ jobs:
             sed -i '/^version:/d' docker-compose.yml
 
             echo "=== Pulling pre-built images from Docker Hub ==="
-            docker compose pull --ignore-pull-failures || true
+            docker compose pull playwright classifier translator || true
 
             echo "=== Starting all services ==="
             docker compose up -d --remove-orphans
 
-            echo "=== Waiting for gateway to be ready (60s max) ==="
+            echo "=== Waiting for gateway to be ready ==="
             for i in $(seq 1 12); do
               if curl -sf -o /dev/null \
                 -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \

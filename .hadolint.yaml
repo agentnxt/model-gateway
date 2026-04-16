@@ -1,0 +1,11 @@
+# .hadolint.yaml — Dockerfile linting rules
+# https://github.com/hadolint/hadolint
+
+failure-threshold: error   # only fail on errors, not warnings
+
+ignore:
+  - DL3008   # apt-get version pinning — handled by base image
+  - DL3009   # apt-get clean — handled by base image
+  - DL3013   # pip version pinning — we pin in requirements files
+  - DL3042   # pip cache — acceptable in build context
+  - DL3059   # multiple RUN instructions — intentional for layer caching

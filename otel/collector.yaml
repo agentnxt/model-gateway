@@ -1,0 +1,106 @@
+# otel/collector.yaml
+# OpenTelemetry Collector — receives all signals, routes to backends
+# CNCF project, Apache 2.0, zero data leaves VPS
+
+receivers:
+  # OTLP — standard protocol for metrics, traces, logs from any service
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Scrape Prometheus metrics from all services
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: litellm
+          static_configs:
+            - targets: [litellm:4000]
+          metrics_path: /metrics
+
+        - job_name: langflow
+          static_configs:
+            - targets: [langflow:7860]
+          metrics_path: /metrics
+
+        - job_name: otel-collector
+          static_configs:
+            - targets: [localhost:8888]
+
+  # Collect Docker container logs
+  docker_stats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 30s
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+
+  # Add service metadata to all signals
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: production
+        action: upsert
+      - key: service.namespace
+        value: autonomyx
+        action: upsert
+
+  # Drop high-cardinality debug signals
+  filter/drop_debug:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.route"] == "/health"'
+        - 'attributes["http.route"] == "/metrics"'
+
+exporters:
+  # Metrics → Prometheus
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: autonomyx
+
+  # Traces → Tempo
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Logs → Loki
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    default_labels_enabled:
+      exporter: false
+      level: true
+
+  # Debug to stdout (warn level only — no PII)
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+service:
+  pipelines:
+    metrics:
+      receivers:  [otlp, prometheus]
+      processors: [batch, resource]
+      exporters:  [prometheus]
+
+    traces:
+      receivers:  [otlp]
+      processors: [batch, resource, filter/drop_debug]
+      exporters:  [otlp/tempo]
+
+    logs:
+      receivers:  [otlp]
+      processors: [batch, resource]
+      exporters:  [loki]
+
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+    logs:
+      level: warn

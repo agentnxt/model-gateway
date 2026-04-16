@@ -137,6 +137,43 @@ jobs:
     needs: build
 
     steps:
+      - name: Inject secrets into server .env
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: vps.openautonomyx.com
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          timeout: 60s
+          envs: GROQ_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,VERTEX_PROJECT_ID,VERTEX_LOCATION,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,STRIPE_SECRET_KEY,GLITCHTIP_AUTH_TOKEN,LITELLM_MASTER_KEY
+          script: |
+            set -e
+            cd /home/ubuntu/autonomyx-model-gateway
+
+            # Write each secret from GitHub Secrets into .env
+            # Only writes if the value is non-empty — never blanks existing values
+            write_secret() {
+              local key="$1" val="$2"
+              [ -z "$val" ] && return
+              if grep -qE "^${key}=" .env 2>/dev/null; then
+                sed -i "s|^${key}=.*|${key}=${val}|" .env
+              else
+                echo "${key}=${val}" >> .env
+              fi
+            }
+
+            write_secret "GROQ_API_KEY"           "$GROQ_API_KEY"
+            write_secret "ANTHROPIC_API_KEY"      "$ANTHROPIC_API_KEY"
+            write_secret "OPENAI_API_KEY"         "$OPENAI_API_KEY"
+            write_secret "VERTEX_PROJECT_ID"      "$VERTEX_PROJECT_ID"
+            write_secret "VERTEX_LOCATION"        "$VERTEX_LOCATION"
+            write_secret "RAZORPAY_KEY_ID"        "$RAZORPAY_KEY_ID"
+            write_secret "RAZORPAY_KEY_SECRET"    "$RAZORPAY_KEY_SECRET"
+            write_secret "STRIPE_SECRET_KEY"      "$STRIPE_SECRET_KEY"
+            write_secret "GLITCHTIP_AUTH_TOKEN"   "$GLITCHTIP_AUTH_TOKEN"
+            write_secret "LITELLM_MASTER_KEY"     "$LITELLM_MASTER_KEY"
+
+            echo "Secrets injected into .env"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -149,7 +186,7 @@ jobs:
 
             cd /home/ubuntu/autonomyx-model-gateway
 
-            echo "=== Bootstrapping missing secrets ==="
+            echo "=== Bootstrapping generated secrets ==="
             chmod +x scripts/bootstrap_env.sh
             bash scripts/bootstrap_env.sh
 

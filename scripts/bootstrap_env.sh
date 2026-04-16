@@ -136,15 +136,16 @@ write_key "SURREAL_USER"  "root"          "static: root"
 write_key "SURREAL_PASS"  "$(hex 24)"     "hex 48"
 write_key "SURREAL_URL"   "http://surrealdb:8000"  "internal container URL"
 
-# ── External APIs (flag if missing, don't generate) ──────────────────────────
+# ── External API keys — injected by CI from GitHub Secrets ──────────────────
 echo ""
-echo "── External API keys (must be set manually) ─────────────"
+echo "── External API keys (injected by CI from GitHub Secrets) ──"
 for key in GROQ_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY \
-           GOOGLE_APPLICATION_CREDENTIALS RAZORPAY_KEY_ID \
-           RAZORPAY_KEY_SECRET STRIPE_SECRET_KEY; do
+           VERTEX_PROJECT_ID VERTEX_LOCATION \
+           RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET STRIPE_SECRET_KEY \
+           GLITCHTIP_AUTH_TOKEN LITELLM_MASTER_KEY; do
   val=$(current "$key")
   if [ -z "$val" ]; then
-    echo "  ⚠️  $key — NOT SET (add manually)"
+    echo "  ⏳ $key — not yet set (will be injected by next CI deploy)"
   else
     echo "  ✅ $key — present"
   fi

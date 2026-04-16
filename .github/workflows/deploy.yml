@@ -268,9 +268,9 @@ jobs:
 
             # Always run apt update + upgrade on deploy (security patches)
             export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq
-            apt-get upgrade -y -qq               -o Dpkg::Options::="--force-confdef"               -o Dpkg::Options::="--force-confold"
-            apt-get autoremove -y -qq
+            sudo apt-get update -qq
+            sudo apt-get upgrade -y -qq               -o Dpkg::Options::="--force-confdef"               -o Dpkg::Options::="--force-confold"
+            sudo apt-get autoremove -y -qq
             echo "System packages up to date"
 
             # Verify Docker

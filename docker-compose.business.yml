@@ -1,0 +1,253 @@
+# Autonomyx Model Gateway — Business Logic Node (48GB)
+# Deploy on your second VPS: docker compose -f docker-compose.business.yml up -d
+# Requires same .env file as primary node
+# Services: Langfuse, Lago, Keycloak, Mailserver
+
+version: "3.9"
+
+networks:
+  coolify:
+    external: true
+
+volumes:
+  langfuse-db-data:
+  lago-db-data:
+  lago-redis-data:
+  keycloak-db-data:
+  mailserver-data:
+  mailserver-state:
+  mailserver-log:
+
+services:
+
+  # ── Langfuse ───────────────────────────────────────────────────────────────
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:3
+    container_name: autonomyx-langfuse
+    restart: always
+    networks:
+      - coolify
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=https://traces.openautonomyx.com
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET}
+      - SALT=${LANGFUSE_SALT}
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
+      - TELEMETRY_ENABLED=false
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.langfuse.rule=Host(`traces.openautonomyx.com`)"
+      - "traefik.http.routers.langfuse.entrypoints=https"
+      - "traefik.http.routers.langfuse.tls.certresolver=letsencrypt"
+      - "traefik.http.services.langfuse.loadbalancer.server.port=3000"
+
+  langfuse-db:
+    image: postgres:15-alpine
+    container_name: autonomyx-langfuse-db
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=${LANGFUSE_DB_PASSWORD}
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Lago ───────────────────────────────────────────────────────────────────
+  lago-api:
+    image: getlago/api:latest
+    container_name: autonomyx-lago-api
+    restart: always
+    networks:
+      - coolify
+    depends_on:
+      lago-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://lago:${LAGO_DB_PASSWORD}@lago-db:5432/lago
+      - REDIS_URL=redis://lago-redis:6379
+      - SECRET_KEY_BASE=${LAGO_SECRET_KEY_BASE}
+      - ENCRYPTION_PRIMARY_KEY=${LAGO_ENCRYPTION_PRIMARY_KEY}
+      - ENCRYPTION_DETERMINISTIC_KEY=${LAGO_ENCRYPTION_DETERMINISTIC_KEY}
+      - ENCRYPTION_KEY_DERIVATION_SALT=${LAGO_ENCRYPTION_KEY_DERIVATION_SALT}
+      - LAGO_API_URL=${LAGO_API_URL}
+      - LAGO_FRONT_URL=${LAGO_FRONT_URL}
+      - RAILS_ENV=production
+      - LAGO_SMTP_ADDRESS=mailserver
+      - LAGO_SMTP_PORT=587
+      - LAGO_SMTP_USERNAME=billing@openautonomyx.com
+      - LAGO_SMTP_PASSWORD=${MAIL_PASSWORD}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.lago-api.rule=Host(`billing.openautonomyx.com`)"
+      - "traefik.http.routers.lago-api.entrypoints=https"
+      - "traefik.http.routers.lago-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.lago-api.loadbalancer.server.port=3000"
+
+  lago-front:
+    image: getlago/front:latest
+    container_name: autonomyx-lago-front
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - API_URL=${LAGO_API_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.lago-front.rule=Host(`billing-ui.openautonomyx.com`)"
+      - "traefik.http.routers.lago-front.entrypoints=https"
+      - "traefik.http.routers.lago-front.tls.certresolver=letsencrypt"
+      - "traefik.http.services.lago-front.loadbalancer.server.port=8080"
+
+  lago-worker:
+    image: getlago/api:latest
+    container_name: autonomyx-lago-worker
+    restart: always
+    networks:
+      - coolify
+    command: ["bundle", "exec", "sidekiq"]
+    environment:
+      - DATABASE_URL=postgresql://lago:${LAGO_DB_PASSWORD}@lago-db:5432/lago
+      - REDIS_URL=redis://lago-redis:6379
+      - SECRET_KEY_BASE=${LAGO_SECRET_KEY_BASE}
+      - RAILS_ENV=production
+
+  lago-clock:
+    image: getlago/api:latest
+    container_name: autonomyx-lago-clock
+    restart: always
+    networks:
+      - coolify
+    command: ["bundle", "exec", "clockwork", "clock.rb"]
+    environment:
+      - DATABASE_URL=postgresql://lago:${LAGO_DB_PASSWORD}@lago-db:5432/lago
+      - REDIS_URL=redis://lago-redis:6379
+      - SECRET_KEY_BASE=${LAGO_SECRET_KEY_BASE}
+      - RAILS_ENV=production
+
+  lago-db:
+    image: postgres:15-alpine
+    container_name: autonomyx-lago-db
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - POSTGRES_USER=lago
+      - POSTGRES_PASSWORD=${LAGO_DB_PASSWORD}
+      - POSTGRES_DB=lago
+    volumes:
+      - lago-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lago"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  lago-redis:
+    image: redis:7-alpine
+    container_name: autonomyx-lago-redis
+    restart: always
+    networks:
+      - coolify
+    volumes:
+      - lago-redis-data:/data
+
+  # ── Keycloak ───────────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: autonomyx-keycloak
+    restart: always
+    networks:
+      - coolify
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://keycloak-db:5432/keycloak
+      - KC_DB_USERNAME=keycloak
+      - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      - KC_HOSTNAME=auth.openautonomyx.com
+      - KC_PROXY=edge
+      - KC_HTTP_ENABLED=true
+    command: ["start"]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`auth.openautonomyx.com`)"
+      - "traefik.http.routers.keycloak.entrypoints=https"
+      - "traefik.http.routers.keycloak.tls.certresolver=letsencrypt"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+
+  keycloak-db:
+    image: postgres:15-alpine
+    container_name: autonomyx-keycloak-db
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - POSTGRES_USER=keycloak
+      - POSTGRES_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      - POSTGRES_DB=keycloak
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak-lago-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.sync
+    container_name: autonomyx-keycloak-lago-sync
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - LAGO_API_URL=${LAGO_API_URL}
+      - LAGO_API_KEY=${LAGO_API_KEY}
+      - LITELLM_URL=http://litellm:4000
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST}
+      - LANGFUSE_ADMIN_KEY=${LANGFUSE_SECRET_KEY}
+
+  # ── Docker Mailserver ──────────────────────────────────────────────────────
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: autonomyx-mailserver
+    restart: always
+    networks:
+      - coolify
+    ports:
+      - "25:25"
+      - "465:465"
+      - "587:587"
+      - "993:993"
+    environment:
+      - ENABLE_RSPAMD=1
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=1
+      - SSL_TYPE=letsencrypt
+      - PERMIT_DOCKER=network
+    volumes:
+      - mailserver-data:/var/mail
+      - mailserver-state:/var/mail-state
+      - mailserver-log:/var/log/mail
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    cap_add:
+      - NET_ADMIN

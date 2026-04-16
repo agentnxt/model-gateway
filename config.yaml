@@ -1,0 +1,205 @@
+# Autonomyx Model Gateway — LiteLLM config.yaml
+# Local models primary. Cloud APIs fallback only.
+# All cloud keys read from environment — never hardcoded.
+
+model_list:
+
+  # ── LOCAL: Ollama (primary — always-on, zero marginal cost) ───────────────
+
+  - model_name: ollama/qwen3:30b-a3b
+    litellm_params:
+      model: ollama/qwen3:30b-a3b
+      api_base: "http://ollama:11434"
+    model_info:
+      description: "Reason, agent, chat, analysis, policy. Always-on 19GB."
+      mode: chat
+
+  - model_name: ollama/qwen2.5-coder:32b
+    litellm_params:
+      model: ollama/qwen2.5-coder:32b
+      api_base: "http://ollama:11434"
+    model_info:
+      description: "Code review, generation, debugging. Always-on 22GB."
+      mode: chat
+
+  - model_name: ollama/qwen2.5:14b
+    litellm_params:
+      model: ollama/qwen2.5:14b
+      api_base: "http://ollama:11434"
+    model_info:
+      description: "Extract, structured output. Always-on 9GB."
+      mode: chat
+
+  - model_name: ollama/llama3.1:8b
+    litellm_params:
+      model: ollama/llama3.1:8b
+      api_base: "http://ollama:11434"
+    model_info:
+      description: "Fast chat, simple tasks. Warm slot 6GB."
+      mode: chat
+
+  - model_name: ollama/llama3.2-vision:11b
+    litellm_params:
+      model: ollama/llama3.2-vision:11b
+      api_base: "http://ollama:11434"
+    model_info:
+      description: "Image analysis, vision tasks. Warm slot 9GB."
+      mode: chat
+
+  - model_name: ollama/gemma3:9b
+    litellm_params:
+      model: ollama/gemma3:9b
+      api_base: "http://ollama:11434"
+    model_info:
+      description: "Long context documents. Warm slot 6GB."
+      mode: chat
+
+  # ── CLOUD APIs: Fallback only ──────────────────────────────────────────────
+  # Used when: local model fails, overloaded, or customer plan allows cloud
+  # Cost: pay per token (tracked via Lago)
+
+  # Groq — fastest cloud inference, best price/performance for fallback
+  - model_name: groq/llama3-70b
+    litellm_params:
+      model: groq/llama3-70b-8192
+      api_key: os.environ/GROQ_API_KEY
+    model_info:
+      description: "Fast cloud fallback. ~$0.59/1M tokens."
+      mode: chat
+
+  - model_name: groq/llama3-8b
+    litellm_params:
+      model: groq/llama3-8b-8192
+      api_key: os.environ/GROQ_API_KEY
+    model_info:
+      description: "Fastest + cheapest cloud fallback. ~$0.05/1M tokens."
+      mode: chat
+
+  # OpenAI — flagship cloud fallback
+  - model_name: gpt-4o
+    litellm_params:
+      model: gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      description: "OpenAI flagship. ~$5/1M input tokens."
+      mode: chat
+
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      description: "OpenAI fast + cheap. ~$0.15/1M input tokens."
+      mode: chat
+
+  # Anthropic — best for writing, analysis, long context
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      description: "Anthropic flagship. ~$3/1M input tokens."
+      mode: chat
+
+  - model_name: claude-3-haiku
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      description: "Anthropic fast + cheap. ~$0.25/1M input tokens."
+      mode: chat
+
+  # Google Gemini
+  - model_name: gemini-1.5-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+    model_info:
+      description: "Google flagship. 2M context window."
+      mode: chat
+
+  - model_name: gemini-1.5-flash
+    litellm_params:
+      model: gemini/gemini-1.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+    model_info:
+      description: "Google fast + cheap. ~$0.075/1M input tokens."
+      mode: chat
+
+  # Mistral
+  - model_name: mistral-large
+    litellm_params:
+      model: mistral/mistral-large-latest
+      api_key: os.environ/MISTRAL_API_KEY
+    model_info:
+      description: "Mistral flagship. Good for European data residency needs."
+      mode: chat
+
+  # OpenRouter — access any model via single key (last resort)
+  - model_name: openrouter/auto
+    litellm_params:
+      model: openrouter/auto
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      description: "Auto-selects best available model. Use as last-resort fallback."
+      mode: chat
+
+# ── Router settings ───────────────────────────────────────────────────────────
+
+router_settings:
+  routing_strategy: usage-based-routing
+  num_retries: 3
+  request_timeout: 60
+  allowed_fails: 2
+  retry_after: 5
+
+  # Fallback chain: local → Groq (fast + cheap) → flagship cloud
+  # Local models always tried first. Cloud only if local fails.
+  fallbacks:
+    - ollama/qwen3:30b-a3b:
+        - groq/llama3-70b
+        - claude-3-5-sonnet
+        - gpt-4o
+    - ollama/qwen2.5-coder:32b:
+        - groq/llama3-70b
+        - gpt-4o
+        - claude-3-5-sonnet
+    - ollama/qwen2.5:14b:
+        - groq/llama3-8b
+        - gpt-4o-mini
+        - gemini-1.5-flash
+    - ollama/llama3.1:8b:
+        - groq/llama3-8b
+        - gpt-4o-mini
+    - ollama/llama3.2-vision:11b:
+        - gpt-4o
+        - gemini-1.5-pro
+    - ollama/gemma3:9b:
+        - groq/llama3-70b
+        - gemini-1.5-pro
+
+# ── LiteLLM settings ──────────────────────────────────────────────────────────
+
+litellm_settings:
+  drop_params: true
+  # Callbacks — Lago for billing, Langfuse for tracing
+  success_callback: ["lago_callback.LagoCallback"]
+  failure_callback: []
+  # Global budget guard (per-key limits set at key generation)
+  max_budget: 100.0
+  budget_duration: 30d
+  store_model_in_db: true
+
+# ── General settings ──────────────────────────────────────────────────────────
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
+  ui_username: os.environ/LITELLM_UI_USERNAME
+  ui_password: os.environ/LITELLM_UI_PASSWORD
+  # Custom routers mounted on the same FastAPI process
+  additional_routers:
+    - recommender.router    # POST /recommend
+    - feedback.router       # POST /feedback
+    - translate.router      # POST /translate (proxies translator sidecar)

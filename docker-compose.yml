@@ -1,0 +1,224 @@
+# Autonomyx Model Gateway — Primary Node (96GB)
+# Deploy on your inference VPS via: docker compose up -d
+# Requires: .env file filled from .env.example
+
+version: "3.9"
+
+networks:
+  coolify:
+    external: true
+
+volumes:
+  litellm-db-data:
+  prometheus-data:
+  grafana-data:
+  langflow-data:
+  langflow-db-data:
+
+services:
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: autonomyx-litellm
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - STORE_MODEL_IN_DB=True
+      - LITELLM_UI_USERNAME=${LITELLM_UI_USERNAME}
+      - LITELLM_UI_PASSWORD=${LITELLM_UI_PASSWORD}
+      # Provider keys (only set the ones you use)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - AZURE_API_BASE=${AZURE_API_BASE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - FIREWORKS_API_KEY=${FIREWORKS_API_KEY}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8"]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.litellm.rule=Host(`llm.openautonomyx.com`)"
+      - "traefik.http.routers.litellm.entrypoints=https"
+      - "traefik.http.routers.litellm.tls.certresolver=letsencrypt"
+      - "traefik.http.services.litellm.loadbalancer.server.port=4000"
+    depends_on:
+      - litellm-db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  litellm-db:
+    image: postgres:15-alpine
+    container_name: autonomyx-litellm-db
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-litellm}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-litellm_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-litellm}
+    volumes:
+      - litellm-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: autonomyx-prometheus
+    restart: always
+    networks:
+      - coolify
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: autonomyx-grafana
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-autonomyx}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`metrics.openautonomyx.com`)"
+      - "traefik.http.routers.grafana.entrypoints=https"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    depends_on:
+      - prometheus
+
+
+  # ── Playwright Scraper ────────────────────────────────────────────────────
+  # Crawl any URL → extract structured data → embed → store in SurrealDB
+  # shm_size CRITICAL: Chrome crashes without it
+  playwright-scraper:
+    build:
+      context: ./playwright_scraper
+      dockerfile: Dockerfile
+    container_name: autonomyx-playwright
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - GATEWAY_URL=http://litellm:4000
+      - OLLAMA_URL=http://ollama:11434
+      - SURREAL_URL=${SURREAL_URL}
+      - SURREAL_NS=autonomyx
+      - SURREAL_DB=scraper
+      - SURREAL_USER=${SURREAL_USER}
+      - SURREAL_PASS=${SURREAL_PASS}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - EXTRACT_MODEL=ollama/qwen3:30b-a3b
+      - EMBED_MODEL=nomic-embed-text
+      - CHUNK_SIZE=512
+      - CHUNK_OVERLAP=64
+      - MAX_PAGES=200
+    shm_size: '256m'        # CRITICAL — Chrome crashes without this
+    mem_limit: 2g           # Chrome is memory-hungry — hard cap
+    memswap_limit: 2g
+    labels:
+      - "traefik.enable=false"   # internal only — not exposed publicly
+
+  # ── Langflow ──────────────────────────────────────────────────────────────
+  langflow:
+    image: langflowai/langflow:latest
+    container_name: autonomyx-langflow
+    restart: always
+    networks:
+      - coolify
+    depends_on:
+      langflow-db:
+        condition: service_healthy
+    environment:
+      - LANGFLOW_DATABASE_URL=postgresql://langflow:${LANGFLOW_DB_PASSWORD}@langflow-db:5432/langflow
+      - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
+      - LANGFLOW_SUPERUSER=${LANGFLOW_ADMIN_EMAIL}
+      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_ADMIN_PASSWORD}
+      - LANGFLOW_AUTO_LOGIN=false
+      # Wire to gateway — all Langflow LLM components use the gateway
+      - OPENAI_API_BASE=http://litellm:4000/v1
+      - OPENAI_API_KEY=${LANGFLOW_VIRTUAL_KEY}
+      - LANGFLOW_LANGCHAIN_CACHE=InMemoryCache
+      - LANGFLOW_STORE=false                    # disable Langflow store (use local only)
+      - LANGFLOW_TELEMETRY_ENABLED=false
+      - LANGFLOW_LOG_LEVEL=warning
+    volumes:
+      - langflow-data:/app/langflow
+      - ./flows:/app/flows:ro                   # pre-load flow templates on startup
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.langflow.rule=Host(`flows.openautonomyx.com`)"
+      - "traefik.http.routers.langflow.entrypoints=https"
+      - "traefik.http.routers.langflow.tls.certresolver=letsencrypt"
+      - "traefik.http.services.langflow.loadbalancer.server.port=7860"
+
+  langflow-db:
+    image: postgres:15-alpine
+    container_name: autonomyx-langflow-db
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - POSTGRES_USER=langflow
+      - POSTGRES_PASSWORD=${LANGFLOW_DB_PASSWORD}
+      - POSTGRES_DB=langflow
+    volumes:
+      - langflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Playwright Scraper ────────────────────────────────────────────────────
+  playwright:
+    image: thefractionalpm/autonomyx-playwright:latest
+    container_name: autonomyx-playwright
+    restart: always
+    networks:
+      - coolify
+    environment:
+      - LITELLM_URL=http://litellm:4000
+      - LITELLM_KEY=${LITELLM_MASTER_KEY}
+      - OLLAMA_URL=http://ollama:11434
+      - EMBED_MODEL=nomic-embed-text
+      - EXTRACT_MODEL=ollama/qwen3:30b-a3b
+      - SURREAL_URL=${SURREAL_URL}
+      - SURREAL_USER=${SURREAL_USER}
+      - SURREAL_PASS=${SURREAL_PASS}
+      - SURREAL_NS=${SURREAL_NS:-autonomyx}
+      - SURREAL_DB=${SURREAL_DB:-scrapes}
+      - MAX_PAGES=50
+      - CHUNK_SIZE=512
+    # CRITICAL: Chrome needs 256MB of /dev/shm — Docker defaults to 64MB
+    shm_size: '256m'
+    deploy:
+      resources:
+        limits:
+          memory: 2g    # Chrome is memory-hungry
+          cpus: '1.0'
+    labels:
+      - "traefik.enable=false"   # internal only

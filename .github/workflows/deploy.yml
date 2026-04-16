@@ -149,6 +149,10 @@ jobs:
 
             cd /home/ubuntu/autonomyx-model-gateway
 
+            echo "=== Bootstrapping missing secrets ==="
+            chmod +x scripts/bootstrap_env.sh
+            bash scripts/bootstrap_env.sh
+
             echo "=== Checking required env vars ==="
             MISSING=()
             for var in LITELLM_MASTER_KEY POSTGRES_PASSWORD GROQ_API_KEY \

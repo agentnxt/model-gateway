@@ -80,24 +80,17 @@ def test_compose_config_valid(compose_file):
     if not path.exists():
         pytest.skip(f"{compose_file} not found")
 
-    # Create a minimal .env so compose doesn't complain about missing vars
-    env_example = root / ".env.example"
-    env_file = root / ".env.test"
-    if env_example.exists() and not env_file.exists():
-        # Strip values, keep keys with empty defaults
-        lines = []
-        for line in env_example.read_text().splitlines():
-            if line.startswith("#") or "=" not in line:
-                lines.append(line)
-            else:
-                key = line.split("=")[0]
-                lines.append(f"{key}=test_placeholder")
-        env_file.write_text("\n".join(lines))
+    # Generate type-aware .env.ci using the shared script
+    subprocess.run(
+        ["python3", "scripts/gen_ci_env.py"],
+        check=True, capture_output=True, cwd=str(root)
+    )
+    env_file = root / ".env.ci"
 
     result = subprocess.run(
         ["docker", "compose",
          "-f", str(path),
-         "--env-file", str(env_file) if env_file.exists() else ".env.example",
+         "--env-file", str(env_file),
          "config", "--quiet"],
         capture_output=True, text=True, cwd=str(root)
     )

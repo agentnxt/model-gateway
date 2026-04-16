@@ -1,0 +1,247 @@
+{
+  "name": "Autonomyx Policy Creator",
+  "description": "Automated website policy generation via Autonomyx Gateway. Input: product description, tech stack, jurisdictions needed. Output: structured JSON with ready-to-publish policy documents (Privacy Policy, Terms of Service, Cookie Policy). Single API call. DPDP 2023, GDPR, CCPA aware. NOTE: For interactive policy creation with sub-processor confirmation, use the website-policy-drafting-skill in Claude.",
+  "data": {
+    "nodes": [
+      {
+        "id": "TextInput-product",
+        "type": "genericNode",
+        "data": {
+          "type": "TextInput",
+          "node": {
+            "template": {
+              "product_name": {
+                "type": "str",
+                "required": true,
+                "display_name": "Product Name",
+                "show": true
+              },
+              "product_description": {
+                "type": "str",
+                "required": true,
+                "display_name": "Product Description",
+                "placeholder": "e.g. B2B SaaS for invoice automation, serving Indian SMEs. Uses Razorpay, Supabase, OpenAI API.",
+                "show": true
+              },
+              "policy_types": {
+                "type": "str",
+                "required": false,
+                "display_name": "Policies Needed",
+                "value": "privacy_policy,terms_of_service,cookie_policy",
+                "placeholder": "privacy_policy,terms_of_service,cookie_policy,acceptable_use",
+                "show": true
+              },
+              "jurisdictions": {
+                "type": "str",
+                "required": false,
+                "display_name": "Jurisdictions",
+                "value": "India (DPDP 2023)",
+                "placeholder": "India (DPDP 2023), EU (GDPR), US (CCPA)",
+                "show": true
+              },
+              "sub_processors": {
+                "type": "str",
+                "required": false,
+                "display_name": "Sub-processors / Third-party Services",
+                "placeholder": "Razorpay, Stripe, OpenAI, Supabase, SendGrid, Google Analytics",
+                "value": "",
+                "show": true
+              },
+              "company_details": {
+                "type": "str",
+                "required": false,
+                "display_name": "Company Details",
+                "placeholder": "Company name, registered address, contact email, DPO email if applicable",
+                "value": "",
+                "show": true
+              }
+            },
+            "display_name": "Product Details",
+            "description": "Product information for policy generation"
+          }
+        },
+        "position": { "x": 80, "y": 300 }
+      },
+
+      {
+        "id": "Prompt-policy",
+        "type": "genericNode",
+        "data": {
+          "type": "Prompt",
+          "node": {
+            "template": {
+              "template": {
+                "type": "str",
+                "value": "You are an expert policy architect. Generate publication-ready website policies for the following product.\n\nProduct: {product_name}\nDescription: {product_description}\nJurisdictions: {jurisdictions}\nPolicies needed: {policy_types}\nSub-processors: {sub_processors}\nCompany details: {company_details}\n\nReturn ONLY a valid JSON object with this structure:\n{{\n  \"product_name\": \"{product_name}\",\n  \"generated_at\": \"<ISO date>\",\n  \"jurisdictions\": [\"list of covered jurisdictions\"],\n  \"policies\": {{\n    \"privacy_policy\": {{\n      \"title\": \"Privacy Policy\",\n      \"effective_date\": \"<date>\",\n      \"content\": \"<full markdown policy text>\",\n      \"word_count\": <integer>,\n      \"compliance_flags\": [\"DPDP 2023\", \"GDPR\", \"CCPA\"]\n    }},\n    \"terms_of_service\": {{\n      \"title\": \"Terms of Service\",\n      \"effective_date\": \"<date>\",\n      \"content\": \"<full markdown policy text>\",\n      \"word_count\": <integer>\n    }},\n    \"cookie_policy\": {{\n      \"title\": \"Cookie Policy\",\n      \"effective_date\": \"<date>\",\n      \"content\": \"<full markdown policy text>\",\n      \"word_count\": <integer>\n    }}\n  }},\n  \"sub_processors_covered\": [\"list of sub-processors mentioned in policies\"],\n  \"missing_information\": [\"list of details needed to improve the policies\"],\n  \"legal_disclaimer\": \"These policies were AI-generated and should be reviewed by qualified legal counsel before publication.\"\n}}\n\nImportant rules:\n- Only generate policy types listed in: {policy_types}\n- For India: reference DPDP Act 2023, include Data Fiduciary obligations\n- For EU: include GDPR lawful basis, data subject rights, DPA contact\n- For US: include CCPA opt-out rights if applicable\n- Never invent sub-processors not listed — use only: {sub_processors}\n- If company_details are empty, use placeholder text clearly marked [FILL IN]\n- Return ONLY the JSON. No markdown fences. No explanation.",
+                "display_name": "Policy Generation Prompt",
+                "show": true
+              }
+            },
+            "display_name": "Policy Prompt",
+            "description": "Structured policy generation prompt"
+          }
+        },
+        "position": { "x": 380, "y": 300 }
+      },
+
+      {
+        "id": "OpenAIModel-policy",
+        "type": "genericNode",
+        "data": {
+          "type": "OpenAIModel",
+          "node": {
+            "template": {
+              "openai_api_base": {
+                "type": "str",
+                "value": "http://litellm:4000/v1",
+                "display_name": "API Base",
+                "show": true
+              },
+              "openai_api_key": {
+                "type": "str",
+                "value": "{LANGFLOW_VIRTUAL_KEY}",
+                "display_name": "API Key",
+                "show": true,
+                "password": true
+              },
+              "model_name": {
+                "type": "str",
+                "value": "ollama/qwen3:30b-a3b",
+                "display_name": "Model",
+                "show": true,
+                "info": "Qwen3-30B-A3B — strong instruction following, long output, 128k context"
+              },
+              "temperature": {
+                "type": "float",
+                "value": 0.2,
+                "display_name": "Temperature",
+                "show": true
+              },
+              "max_tokens": {
+                "type": "int",
+                "value": 8192,
+                "display_name": "Max Tokens",
+                "show": true,
+                "info": "Policies can be long — 8k tokens for full documents"
+              },
+              "json_mode": {
+                "type": "bool",
+                "value": true,
+                "display_name": "JSON Mode",
+                "show": true
+              }
+            },
+            "display_name": "Qwen3-30B (Policy Writer)",
+            "description": "Local model — policy content never leaves your VPS"
+          }
+        },
+        "position": { "x": 680, "y": 300 }
+      },
+
+      {
+        "id": "TextOutput-policies",
+        "type": "genericNode",
+        "data": {
+          "type": "TextOutput",
+          "node": {
+            "template": {
+              "input_value": {
+                "type": "str",
+                "required": true,
+                "display_name": "Generated Policies",
+                "show": true
+              }
+            },
+            "display_name": "Policy Output",
+            "description": "JSON containing all generated policy documents"
+          }
+        },
+        "position": { "x": 980, "y": 300 }
+      }
+    ],
+
+    "edges": [
+      {
+        "id": "edge-product-to-prompt",
+        "source": "TextInput-product",
+        "sourceHandle": "product_name",
+        "target": "Prompt-policy",
+        "targetHandle": "product_name"
+      },
+      {
+        "id": "edge-desc-to-prompt",
+        "source": "TextInput-product",
+        "sourceHandle": "product_description",
+        "target": "Prompt-policy",
+        "targetHandle": "product_description"
+      },
+      {
+        "id": "edge-types-to-prompt",
+        "source": "TextInput-product",
+        "sourceHandle": "policy_types",
+        "target": "Prompt-policy",
+        "targetHandle": "policy_types"
+      },
+      {
+        "id": "edge-jur-to-prompt",
+        "source": "TextInput-product",
+        "sourceHandle": "jurisdictions",
+        "target": "Prompt-policy",
+        "targetHandle": "jurisdictions"
+      },
+      {
+        "id": "edge-sp-to-prompt",
+        "source": "TextInput-product",
+        "sourceHandle": "sub_processors",
+        "target": "Prompt-policy",
+        "targetHandle": "sub_processors"
+      },
+      {
+        "id": "edge-co-to-prompt",
+        "source": "TextInput-product",
+        "sourceHandle": "company_details",
+        "target": "Prompt-policy",
+        "targetHandle": "company_details"
+      },
+      {
+        "id": "edge-prompt-to-model",
+        "source": "Prompt-policy",
+        "sourceHandle": "prompt",
+        "target": "OpenAIModel-policy",
+        "targetHandle": "input_value"
+      },
+      {
+        "id": "edge-model-to-output",
+        "source": "OpenAIModel-policy",
+        "sourceHandle": "text",
+        "target": "TextOutput-policies",
+        "targetHandle": "input_value"
+      }
+    ],
+
+    "viewport": { "zoom": 0.75, "x": 0, "y": 0 }
+  },
+
+  "is_component": false,
+  "last_tested_version": "1.0",
+  "variables": [
+    {
+      "name": "LANGFLOW_VIRTUAL_KEY",
+      "type": "str",
+      "value": "sk-autonomyx-langflow-prod",
+      "description": "LiteLLM virtual key for spend tracking"
+    }
+  ],
+
+  "important_notes": [
+    "This flow is for AUTOMATED policy generation — single call, no interaction",
+    "For INTERACTIVE policy creation with sub-processor confirmation, use the website-policy-drafting-skill in Claude",
+    "Always have generated policies reviewed by qualified legal counsel before publication",
+    "Sub-processors must be explicitly listed — flow will not invent them",
+    "DPDP 2023 compliance language included for Indian products by default"
+  ],
+
+  "api_example": {
+    "curl": "curl -X POST https://flows.openautonomyx.com/api/v1/run/{flow_id} \\\n  -H 'Authorization: Bearer lf-your-api-key' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"product_name\": \"InvoiceAI\", \"product_description\": \"B2B SaaS for invoice automation. Uses Razorpay and Supabase.\", \"jurisdictions\": \"India (DPDP 2023)\", \"sub_processors\": \"Razorpay, Supabase\", \"company_details\": \"InvoiceAI Pvt Ltd, Bengaluru, hello@invoiceai.com\"}'"
+  }
+}

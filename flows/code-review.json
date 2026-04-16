@@ -1,0 +1,235 @@
+{
+  "name": "Autonomyx Code Review",
+  "description": "Automated code review via Autonomyx Gateway. Routes to Qwen2.5-Coder-32B. Returns structured JSON: bugs, security issues, style violations, improvement suggestions, overall score. Single API call, no interaction required.",
+  "data": {
+    "nodes": [
+      {
+        "id": "TextInput-code",
+        "type": "genericNode",
+        "data": {
+          "type": "TextInput",
+          "node": {
+            "template": {
+              "input_value": {
+                "type": "str",
+                "required": true,
+                "display_name": "Code",
+                "placeholder": "Paste code to review here",
+                "show": true
+              },
+              "language": {
+                "type": "str",
+                "required": false,
+                "display_name": "Language",
+                "placeholder": "python / javascript / go / rust / java / auto-detect",
+                "value": "auto-detect",
+                "show": true
+              },
+              "context": {
+                "type": "str",
+                "required": false,
+                "display_name": "Context",
+                "placeholder": "e.g. production API endpoint, internal script, library function",
+                "value": "",
+                "show": true
+              }
+            },
+            "display_name": "Code Input",
+            "description": "Code to review, language, and optional context"
+          }
+        },
+        "position": { "x": 80, "y": 300 }
+      },
+
+      {
+        "id": "Prompt-system",
+        "type": "genericNode",
+        "data": {
+          "type": "Prompt",
+          "node": {
+            "template": {
+              "template": {
+                "type": "str",
+                "value": "You are a senior software engineer conducting a thorough code review. Review the following {language} code and return ONLY a valid JSON object with this exact structure:\n\n{{\n  \"language\": \"detected or provided language\",\n  \"overall_score\": <integer 1-10>,\n  \"summary\": \"2-3 sentence overall assessment\",\n  \"bugs\": [\n    {{\"severity\": \"critical|high|medium|low\", \"line\": <line_number or null>, \"description\": \"...\", \"fix\": \"...\"}}\n  ],\n  \"security\": [\n    {{\"severity\": \"critical|high|medium|low\", \"line\": <line_number or null>, \"description\": \"...\", \"fix\": \"...\"}}\n  ],\n  \"style\": [\n    {{\"severity\": \"medium|low\", \"line\": <line_number or null>, \"description\": \"...\", \"fix\": \"...\"}}\n  ],\n  \"improvements\": [\n    {{\"impact\": \"high|medium|low\", \"description\": \"...\", \"example\": \"...\"}}\n  ],\n  \"positive\": [\"what the code does well\"]\n}}\n\nContext: {context}\n\nReturn ONLY the JSON. No markdown fences. No explanation.",
+                "display_name": "System Prompt",
+                "show": true
+              }
+            },
+            "display_name": "Review Prompt",
+            "description": "Structured code review prompt — produces JSON output"
+          }
+        },
+        "position": { "x": 320, "y": 300 }
+      },
+
+      {
+        "id": "OpenAIModel-coder",
+        "type": "genericNode",
+        "data": {
+          "type": "OpenAIModel",
+          "node": {
+            "template": {
+              "openai_api_base": {
+                "type": "str",
+                "value": "http://litellm:4000/v1",
+                "display_name": "API Base",
+                "show": true
+              },
+              "openai_api_key": {
+                "type": "str",
+                "value": "{LANGFLOW_VIRTUAL_KEY}",
+                "display_name": "API Key",
+                "show": true,
+                "password": true
+              },
+              "model_name": {
+                "type": "str",
+                "value": "ollama/qwen2.5-coder:32b",
+                "display_name": "Model",
+                "show": true,
+                "info": "Always routes to Qwen2.5-Coder-32B — best open code model (HumanEval+ 92.7%)"
+              },
+              "temperature": {
+                "type": "float",
+                "value": 0.1,
+                "display_name": "Temperature",
+                "show": true,
+                "info": "Low temperature for consistent, deterministic code review"
+              },
+              "max_tokens": {
+                "type": "int",
+                "value": 4096,
+                "display_name": "Max Tokens",
+                "show": true
+              },
+              "json_mode": {
+                "type": "bool",
+                "value": true,
+                "display_name": "JSON Mode",
+                "show": true
+              }
+            },
+            "display_name": "Qwen2.5-Coder-32B",
+            "description": "Local code model — data stays on VPS"
+          }
+        },
+        "position": { "x": 560, "y": 300 }
+      },
+
+      {
+        "id": "ParseData-json",
+        "type": "genericNode",
+        "data": {
+          "type": "ParseData",
+          "node": {
+            "template": {
+              "sep": {
+                "type": "str",
+                "value": "\n",
+                "display_name": "Separator",
+                "show": false
+              }
+            },
+            "display_name": "Parse JSON Output",
+            "description": "Validates and parses the JSON code review"
+          }
+        },
+        "position": { "x": 800, "y": 300 }
+      },
+
+      {
+        "id": "TextOutput-review",
+        "type": "genericNode",
+        "data": {
+          "type": "TextOutput",
+          "node": {
+            "template": {
+              "input_value": {
+                "type": "str",
+                "required": true,
+                "display_name": "Review Result",
+                "show": true
+              }
+            },
+            "display_name": "Code Review Output",
+            "description": "Structured JSON code review result"
+          }
+        },
+        "position": { "x": 1040, "y": 300 }
+      }
+    ],
+
+    "edges": [
+      {
+        "id": "edge-code-to-prompt",
+        "source": "TextInput-code",
+        "sourceHandle": "input_value",
+        "target": "Prompt-system",
+        "targetHandle": "code"
+      },
+      {
+        "id": "edge-lang-to-prompt",
+        "source": "TextInput-code",
+        "sourceHandle": "language",
+        "target": "Prompt-system",
+        "targetHandle": "language"
+      },
+      {
+        "id": "edge-context-to-prompt",
+        "source": "TextInput-code",
+        "sourceHandle": "context",
+        "target": "Prompt-system",
+        "targetHandle": "context"
+      },
+      {
+        "id": "edge-prompt-to-model",
+        "source": "Prompt-system",
+        "sourceHandle": "prompt",
+        "target": "OpenAIModel-coder",
+        "targetHandle": "input_value"
+      },
+      {
+        "id": "edge-model-to-parse",
+        "source": "OpenAIModel-coder",
+        "sourceHandle": "text",
+        "target": "ParseData-json",
+        "targetHandle": "data"
+      },
+      {
+        "id": "edge-parse-to-output",
+        "source": "ParseData-json",
+        "sourceHandle": "text",
+        "target": "TextOutput-review",
+        "targetHandle": "input_value"
+      }
+    ],
+
+    "viewport": { "zoom": 0.8, "x": 0, "y": 0 }
+  },
+
+  "is_component": false,
+  "last_tested_version": "1.0",
+  "variables": [
+    {
+      "name": "LANGFLOW_VIRTUAL_KEY",
+      "type": "str",
+      "value": "sk-autonomyx-langflow-prod",
+      "description": "LiteLLM virtual key for spend tracking"
+    }
+  ],
+
+  "api_example": {
+    "description": "Call this flow via Langflow API",
+    "curl": "curl -X POST https://flows.openautonomyx.com/api/v1/run/{flow_id} \\\n  -H 'Authorization: Bearer lf-your-api-key' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"input_value\": \"def process_payment(card_number, amount):\\n    query = f\\\"INSERT INTO payments VALUES ({card_number}, {amount})\\\"\\n    db.execute(query)\", \"language\": \"python\", \"context\": \"payment processing API\"}'",
+    "response_shape": {
+      "language": "python",
+      "overall_score": 2,
+      "summary": "Critical SQL injection vulnerability. No input validation. No error handling.",
+      "bugs": [{"severity": "critical", "line": 2, "description": "SQL injection via f-string", "fix": "Use parameterised queries"}],
+      "security": [{"severity": "critical", "line": 1, "description": "Card number in plain text", "fix": "Never log or store raw card numbers — use tokenisation"}],
+      "style": [],
+      "improvements": [{"impact": "high", "description": "Add error handling and transaction rollback", "example": "try/except with db.rollback()"}],
+      "positive": ["Function signature is clear"]
+    }
+  }
+}

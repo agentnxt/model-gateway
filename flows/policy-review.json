@@ -1,0 +1,232 @@
+{
+  "name": "Autonomyx Policy Review",
+  "description": "Automated inbound vendor/website policy analysis via Autonomyx Gateway. Input: policy URL or policy text. Output: structured JSON analysis across 5 domains — Privacy, AI Training, Security, Carbon, Governance. Flags risks, deadline-bound actions, and changes. Single API call. For interactive analysis, use saas-policy-intelligence skill in Claude.",
+  "data": {
+    "nodes": [
+      {
+        "id": "TextInput-policy",
+        "type": "genericNode",
+        "data": {
+          "type": "TextInput",
+          "node": {
+            "template": {
+              "vendor_name": {
+                "type": "str",
+                "required": true,
+                "display_name": "Vendor Name",
+                "placeholder": "e.g. OpenAI, Razorpay, Supabase",
+                "show": true
+              },
+              "policy_text": {
+                "type": "str",
+                "required": true,
+                "display_name": "Policy Text",
+                "placeholder": "Paste the full policy text here (Privacy Policy, ToS, DPA, or any vendor policy document)",
+                "show": true
+              },
+              "policy_type": {
+                "type": "str",
+                "required": false,
+                "display_name": "Policy Type",
+                "value": "auto-detect",
+                "placeholder": "privacy_policy / terms_of_service / dpa / acceptable_use / auto-detect",
+                "show": true
+              },
+              "review_context": {
+                "type": "str",
+                "required": false,
+                "display_name": "Review Context",
+                "placeholder": "e.g. We handle sensitive financial data. Evaluating for DPDP compliance. Indian customers only.",
+                "value": "",
+                "show": true
+              },
+              "previous_version": {
+                "type": "str",
+                "required": false,
+                "display_name": "Previous Policy Version (optional)",
+                "placeholder": "Paste previous version to detect changes",
+                "value": "",
+                "show": true
+              }
+            },
+            "display_name": "Policy Input",
+            "description": "Vendor policy text and review context"
+          }
+        },
+        "position": { "x": 80, "y": 300 }
+      },
+
+      {
+        "id": "Prompt-review",
+        "type": "genericNode",
+        "data": {
+          "type": "Prompt",
+          "node": {
+            "template": {
+              "template": {
+                "type": "str",
+                "value": "You are an expert privacy and compliance analyst. Analyse the following vendor policy document and return ONLY a valid JSON object.\n\nVendor: {vendor_name}\nPolicy type: {policy_type}\nReview context: {review_context}\n\nPolicy text:\n{policy_text}\n\nPrevious version (if provided — use to detect changes):\n{previous_version}\n\nReturn ONLY this JSON structure:\n{{\n  \"vendor\": \"{vendor_name}\",\n  \"policy_type\": \"detected type\",\n  \"analysis_date\": \"<ISO date>\",\n  \"risk_level\": \"low|medium|high|critical\",\n  \"executive_summary\": \"3-4 sentence plain-English summary of key findings\",\n  \"what_changed\": [\n    {{\"section\": \"...\", \"change\": \"...\", \"impact\": \"low|medium|high\", \"action_required\": true/false}}\n  ],\n  \"domains\": {{\n    \"privacy_data_usage\": {{\n      \"score\": <1-10>,\n      \"findings\": [\"...\"],\n      \"data_collected\": [\"...\"],\n      \"retention_period\": \"...\",\n      \"data_sharing\": [\"...\"],\n      \"user_rights\": [\"...\"],\n      \"lawful_basis\": \"...\",\n      \"red_flags\": [\"...\"]\n    }},\n    \"ai_ml_training\": {{\n      \"score\": <1-10>,\n      \"trains_on_user_data\": true/false/\"unclear\",\n      \"opt_out_available\": true/false/\"unclear\",\n      \"opt_out_method\": \"...\",\n      \"enterprise_exemption\": true/false/\"unclear\",\n      \"findings\": [\"...\"],\n      \"red_flags\": [\"...\"]\n    }},\n    \"security_posture\": {{\n      \"score\": <1-10>,\n      \"certifications\": [\"SOC 2\", \"ISO 27001\", etc.],\n      \"encryption\": \"...\",\n      \"incident_response\": \"...\",\n      \"findings\": [\"...\"],\n      \"red_flags\": [\"...\"]\n    }},\n    \"carbon_sustainability\": {{\n      \"score\": <1-10>,\n      \"net_zero_commitment\": \"...\",\n      \"renewable_energy\": \"...\",\n      \"findings\": [\"...\"]\n    }},\n    \"governance\": {{\n      \"score\": <1-10>,\n      \"gdpr_compliant\": true/false/\"unclear\",\n      \"dpdp_2023_compliant\": true/false/\"unclear\",\n      \"ccpa_compliant\": true/false/\"unclear\",\n      \"dpa_available\": true/false,\n      \"dpo_contact\": \"...\",\n      \"findings\": [\"...\"],\n      \"red_flags\": [\"...\"]\n    }}\n  }},\n  \"deadline_actions\": [\n    {{\"action\": \"...\", \"deadline\": \"...\", \"priority\": \"urgent|high|medium\"}}\n  ],\n  \"recommended_actions\": [\n    {{\"action\": \"...\", \"effort\": \"low|medium|high\", \"impact\": \"low|medium|high\"}}\n  ],\n  \"opt_out_instructions\": {{\n    \"ai_training\": \"step-by-step instructions or null if not applicable\",\n    \"marketing\": \"step-by-step instructions or null\",\n    \"analytics\": \"step-by-step instructions or null\"\n  }}\n}}\n\nReturn ONLY the JSON. No markdown fences. No explanation.",
+                "display_name": "Policy Review Prompt",
+                "show": true
+              }
+            },
+            "display_name": "Review Prompt",
+            "description": "5-domain policy analysis prompt"
+          }
+        },
+        "position": { "x": 380, "y": 300 }
+      },
+
+      {
+        "id": "OpenAIModel-review",
+        "type": "genericNode",
+        "data": {
+          "type": "OpenAIModel",
+          "node": {
+            "template": {
+              "openai_api_base": {
+                "type": "str",
+                "value": "http://litellm:4000/v1",
+                "display_name": "API Base",
+                "show": true
+              },
+              "openai_api_key": {
+                "type": "str",
+                "value": "{LANGFLOW_VIRTUAL_KEY}",
+                "display_name": "API Key",
+                "show": true,
+                "password": true
+              },
+              "model_name": {
+                "type": "str",
+                "value": "ollama/qwen3:30b-a3b",
+                "display_name": "Model",
+                "show": true,
+                "info": "Qwen3-30B-A3B with /think mode — better reasoning on policy nuance"
+              },
+              "temperature": {
+                "type": "float",
+                "value": 0.1,
+                "display_name": "Temperature",
+                "show": true
+              },
+              "max_tokens": {
+                "type": "int",
+                "value": 6144,
+                "display_name": "Max Tokens",
+                "show": true
+              },
+              "json_mode": {
+                "type": "bool",
+                "value": true,
+                "display_name": "JSON Mode",
+                "show": true
+              }
+            },
+            "display_name": "Qwen3-30B (Policy Analyst)",
+            "description": "Local reasoning model — policy text never leaves your VPS"
+          }
+        },
+        "position": { "x": 680, "y": 300 }
+      },
+
+      {
+        "id": "TextOutput-analysis",
+        "type": "genericNode",
+        "data": {
+          "type": "TextOutput",
+          "node": {
+            "template": {
+              "input_value": {
+                "type": "str",
+                "required": true,
+                "display_name": "Policy Analysis",
+                "show": true
+              }
+            },
+            "display_name": "Analysis Output",
+            "description": "Structured JSON policy analysis across 5 domains"
+          }
+        },
+        "position": { "x": 980, "y": 300 }
+      }
+    ],
+
+    "edges": [
+      {
+        "id": "edge-vendor-to-prompt",
+        "source": "TextInput-policy",
+        "sourceHandle": "vendor_name",
+        "target": "Prompt-review",
+        "targetHandle": "vendor_name"
+      },
+      {
+        "id": "edge-text-to-prompt",
+        "source": "TextInput-policy",
+        "sourceHandle": "policy_text",
+        "target": "Prompt-review",
+        "targetHandle": "policy_text"
+      },
+      {
+        "id": "edge-type-to-prompt",
+        "source": "TextInput-policy",
+        "sourceHandle": "policy_type",
+        "target": "Prompt-review",
+        "targetHandle": "policy_type"
+      },
+      {
+        "id": "edge-ctx-to-prompt",
+        "source": "TextInput-policy",
+        "sourceHandle": "review_context",
+        "target": "Prompt-review",
+        "targetHandle": "review_context"
+      },
+      {
+        "id": "edge-prev-to-prompt",
+        "source": "TextInput-policy",
+        "sourceHandle": "previous_version",
+        "target": "Prompt-review",
+        "targetHandle": "previous_version"
+      },
+      {
+        "id": "edge-prompt-to-model",
+        "source": "Prompt-review",
+        "sourceHandle": "prompt",
+        "target": "OpenAIModel-review",
+        "targetHandle": "input_value"
+      },
+      {
+        "id": "edge-model-to-output",
+        "source": "OpenAIModel-review",
+        "sourceHandle": "text",
+        "target": "TextOutput-analysis",
+        "targetHandle": "input_value"
+      }
+    ],
+
+    "viewport": { "zoom": 0.75, "x": 0, "y": 0 }
+  },
+
+  "is_component": false,
+  "last_tested_version": "1.0",
+  "variables": [
+    {
+      "name": "LANGFLOW_VIRTUAL_KEY",
+      "type": "str",
+      "value": "sk-autonomyx-langflow-prod",
+      "description": "LiteLLM virtual key for spend tracking"
+    }
+  ],
+
+  "important_notes": [
+    "This flow analyses INBOUND vendor policies — for drafting YOUR OWN policies use policy-creator.json",
+    "Policy text stays on your VPS — never sent to cloud models by default",
+    "Pass previous_version to detect what changed between policy versions",
+    "For interactive analysis with web search, use saas-policy-intelligence skill in Claude",
+    "DPDP 2023 compliance check included — relevant for Indian vendors and customers"
+  ],
+
+  "api_example": {
+    "curl": "curl -X POST https://flows.openautonomyx.com/api/v1/run/{flow_id} \\\n  -H 'Authorization: Bearer lf-your-api-key' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"vendor_name\": \"Razorpay\", \"policy_text\": \"<paste policy text here>\", \"review_context\": \"We process payments for Indian SMEs. Need DPDP 2023 compliance.\"}'"
+  }
+}

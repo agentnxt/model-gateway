@@ -58,9 +58,12 @@ Peak RAM: ~84GB. Runs on a 96GB VPS. No GPU required.
 
 ## Pre-built workflows (flows/)
 
-| Flow | What it does |
-|---|---|
-| `gateway-agent.json` | Language detect → recommend model → LLM → feedback capture |
+| Flow | Model used | What it does |
+|---|---|---|
+| `gateway-agent.json` | Qwen3-30B-A3B (recommended) | Language detect → recommend model → LLM → feedback capture |
+| `code-review.json` | Qwen2.5-Coder-32B (always) | Code review → structured JSON: bugs, security, style, score |
+| `policy-creator.json` | Qwen3-30B-A3B (always) | Generate Privacy Policy, ToS, Cookie Policy — DPDP 2023 aware |
+| `policy-review.json` | Qwen3-30B-A3B (always) | Analyse vendor policy → 5-domain risk report + actions |
 
 Add your own flows to `flows/` — they load into Autonomyx Langflow on startup.
 

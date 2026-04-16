@@ -1,0 +1,247 @@
+{
+  "name": "Autonomyx Feature Gap Analyzer",
+  "description": "Automated feature gap analysis between two or more enterprise software products. Input: product names, category, optional analyst doc or URL. Output: structured JSON with scored feature matrix, gap table, and narrative report. Uses Qwen3-30B reasoning + web research. Single API call for programmatic use. For interactive analysis with PDF uploads, use feature-gap-analyzer skill in Claude.",
+  "data": {
+    "nodes": [
+      {
+        "id": "TextInput-products",
+        "type": "genericNode",
+        "data": {
+          "type": "TextInput",
+          "node": {
+            "template": {
+              "product_a": {
+                "type": "str",
+                "required": true,
+                "display_name": "Product A",
+                "placeholder": "e.g. Salesforce",
+                "show": true
+              },
+              "product_b": {
+                "type": "str",
+                "required": true,
+                "display_name": "Product B",
+                "placeholder": "e.g. HubSpot",
+                "show": true
+              },
+              "product_c": {
+                "type": "str",
+                "required": false,
+                "display_name": "Product C (optional)",
+                "placeholder": "e.g. Zoho CRM",
+                "value": "",
+                "show": true
+              },
+              "category": {
+                "type": "str",
+                "required": false,
+                "display_name": "Software Category",
+                "placeholder": "e.g. CRM, HCM, BI, ITSM, Marketing Automation — auto-detected if empty",
+                "value": "",
+                "show": true
+              },
+              "focus_dimensions": {
+                "type": "str",
+                "required": false,
+                "display_name": "Focus Dimensions (optional)",
+                "placeholder": "e.g. AI/ML, API, Security — analyses all 10 if empty",
+                "value": "",
+                "show": true
+              },
+              "analyst_context": {
+                "type": "str",
+                "required": false,
+                "display_name": "Analyst Context (optional)",
+                "placeholder": "Paste text from Gartner, G2, Forrester, or any analyst source",
+                "value": "",
+                "show": true
+              }
+            },
+            "display_name": "Products to Compare",
+            "description": "Product names and optional context for feature gap analysis"
+          }
+        },
+        "position": { "x": 80, "y": 300 }
+      },
+
+      {
+        "id": "Prompt-research",
+        "type": "genericNode",
+        "data": {
+          "type": "Prompt",
+          "node": {
+            "template": {
+              "template": {
+                "type": "str",
+                "value": "You are an expert enterprise software analyst performing a feature gap analysis.\n\nProducts to compare:\n- Product A: {product_a}\n- Product B: {product_b}\n{product_c_line}\n\nSoftware category: {category} (auto-detect if empty)\nFocus dimensions: {focus_dimensions} (all 10 if empty)\n\nAnalyst context provided:\n{analyst_context}\n\nAnalyse the following 10 universal dimensions (plus any category-specific ones):\n1. Platform Features (core functionality)\n2. AI/ML Capabilities\n3. API & Developer Tools\n4. Data Ingestion & Integration\n5. Reporting & Analytics\n6. Third-party Integrations\n7. Security & Compliance\n8. Mobile Experience\n9. Support & SLA\n10. Pricing Model\n\nIMPORTANT RULES:\n- Feature EXISTENCE confirmed only from official docs/GitHub\n- Analyst reports used for scoring context only\n- Score each product 0-100% per dimension based on evidence\n- If a feature is unconfirmed, mark as 'Unknown' not 'No'\n- Note the evidence source for each key finding\n\nReturn ONLY a valid JSON object:\n{{\n  \"products\": [\"{product_a}\", \"{product_b}\"{product_c_json}],\n  \"category\": \"detected or provided category\",\n  \"analysis_date\": \"<ISO date>\",\n  \"executive_summary\": \"3-4 sentence plain-English summary of key gaps\",\n  \"recommendation\": {{\n    \"winner_overall\": \"product name or 'tie'\",\n    \"winner_reasoning\": \"...\",\n    \"best_for\": {{\n      \"{product_a}\": \"specific use case where A wins\",\n      \"{product_b}\": \"specific use case where B wins\"\n    }}\n  }},\n  \"dimensions\": [\n    {{\n      \"dimension\": \"Platform Features\",\n      \"weight\": \"high|medium|low\",\n      \"scores\": {{\"{product_a}\": <0-100>, \"{product_b}\": <0-100>}},\n      \"gap\": \"<product> leads by <N> points\",\n      \"key_findings\": [\n        {{\"feature\": \"...\", \"product_a_status\": \"GA|Beta|Roadmap|Not Present|Unknown\", \"product_b_status\": \"...\", \"notes\": \"...\"}}\n      ]\n    }}\n  ],\n  \"feature_matrix\": [\n    {{\"feature\": \"...\", \"dimension\": \"...\", \"{product_a}\": \"GA|Beta|Roadmap|Not Present|Unknown\", \"{product_b}\": \"GA|Beta|Roadmap|Not Present|Unknown\", \"advantage\": \"product name or 'tie'\"}}\n  ],\n  \"critical_gaps\": [\n    {{\"gap\": \"...\", \"missing_in\": \"product name\", \"impact\": \"high|medium|low\", \"workaround\": \"...\"}}\n  ],\n  \"data_quality\": {{\n    \"confidence\": \"high|medium|low\",\n    \"sources_used\": [\"...\"],\n    \"unverified_claims\": [\"...\"]\n  }}\n}}\n\nReturn ONLY the JSON. No markdown fences. No explanation.",
+                "display_name": "Analysis Prompt",
+                "show": true
+              }
+            },
+            "display_name": "Gap Analysis Prompt",
+            "description": "10-dimension feature gap analysis prompt"
+          }
+        },
+        "position": { "x": 380, "y": 300 }
+      },
+
+      {
+        "id": "OpenAIModel-analyzer",
+        "type": "genericNode",
+        "data": {
+          "type": "OpenAIModel",
+          "node": {
+            "template": {
+              "openai_api_base": {
+                "type": "str",
+                "value": "http://litellm:4000/v1",
+                "display_name": "API Base",
+                "show": true
+              },
+              "openai_api_key": {
+                "type": "str",
+                "value": "{LANGFLOW_VIRTUAL_KEY}",
+                "display_name": "API Key",
+                "show": true,
+                "password": true
+              },
+              "model_name": {
+                "type": "str",
+                "value": "ollama/qwen3:30b-a3b",
+                "display_name": "Model",
+                "show": true,
+                "info": "Qwen3-30B-A3B with thinking mode — best local reasoning for analysis tasks"
+              },
+              "temperature": {
+                "type": "float",
+                "value": 0.1,
+                "display_name": "Temperature",
+                "show": true
+              },
+              "max_tokens": {
+                "type": "int",
+                "value": 8192,
+                "display_name": "Max Tokens",
+                "show": true,
+                "info": "Feature matrices can be large — 8k for comprehensive analysis"
+              },
+              "json_mode": {
+                "type": "bool",
+                "value": true,
+                "display_name": "JSON Mode",
+                "show": true
+              }
+            },
+            "display_name": "Qwen3-30B (Analyst)",
+            "description": "Local reasoning model for feature gap analysis"
+          }
+        },
+        "position": { "x": 680, "y": 300 }
+      },
+
+      {
+        "id": "TextOutput-analysis",
+        "type": "genericNode",
+        "data": {
+          "type": "TextOutput",
+          "node": {
+            "template": {
+              "input_value": {
+                "type": "str",
+                "required": true,
+                "display_name": "Gap Analysis",
+                "show": true
+              }
+            },
+            "display_name": "Gap Analysis Output",
+            "description": "Structured JSON: scored matrix, feature table, gaps, recommendation"
+          }
+        },
+        "position": { "x": 980, "y": 300 }
+      }
+    ],
+
+    "edges": [
+      {
+        "id": "edge-pa-to-prompt",
+        "source": "TextInput-products",
+        "sourceHandle": "product_a",
+        "target": "Prompt-research",
+        "targetHandle": "product_a"
+      },
+      {
+        "id": "edge-pb-to-prompt",
+        "source": "TextInput-products",
+        "sourceHandle": "product_b",
+        "target": "Prompt-research",
+        "targetHandle": "product_b"
+      },
+      {
+        "id": "edge-pc-to-prompt",
+        "source": "TextInput-products",
+        "sourceHandle": "product_c",
+        "target": "Prompt-research",
+        "targetHandle": "product_c_line"
+      },
+      {
+        "id": "edge-cat-to-prompt",
+        "source": "TextInput-products",
+        "sourceHandle": "category",
+        "target": "Prompt-research",
+        "targetHandle": "category"
+      },
+      {
+        "id": "edge-dim-to-prompt",
+        "source": "TextInput-products",
+        "sourceHandle": "focus_dimensions",
+        "target": "Prompt-research",
+        "targetHandle": "focus_dimensions"
+      },
+      {
+        "id": "edge-ctx-to-prompt",
+        "source": "TextInput-products",
+        "sourceHandle": "analyst_context",
+        "target": "Prompt-research",
+        "targetHandle": "analyst_context"
+      },
+      {
+        "id": "edge-prompt-to-model",
+        "source": "Prompt-research",
+        "sourceHandle": "prompt",
+        "target": "OpenAIModel-analyzer",
+        "targetHandle": "input_value"
+      },
+      {
+        "id": "edge-model-to-output",
+        "source": "OpenAIModel-analyzer",
+        "sourceHandle": "text",
+        "target": "TextOutput-analysis",
+        "targetHandle": "input_value"
+      }
+    ],
+
+    "viewport": { "zoom": 0.75, "x": 0, "y": 0 }
+  },
+
+  "is_component": false,
+  "last_tested_version": "1.0",
+  "variables": [
+    {
+      "name": "LANGFLOW_VIRTUAL_KEY",
+      "type": "str",
+      "value": "sk-autonomyx-langflow-prod"
+    }
+  ],
+
+  "important_notes": [
+    "This flow uses Qwen3-30B local knowledge — no live web search",
+    "For web-search-augmented analysis with PDF uploads, use feature-gap-analyzer skill in Claude",
+    "Paste analyst report text into analyst_context for higher accuracy",
+    "Feature existence confirmed from model's training data — always verify critical findings against official docs",
+    "Data quality score in output indicates confidence level"
+  ],
+
+  "api_example": {
+    "curl": "curl -X POST https://flows.openautonomyx.com/api/v1/run/{flow_id} \\\n  -H 'Authorization: Bearer lf-your-api-key' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"product_a\": \"Salesforce\", \"product_b\": \"HubSpot\", \"category\": \"CRM\", \"focus_dimensions\": \"AI/ML, API, Pricing\"}'"
+  }
+}

@@ -1,0 +1,253 @@
+{
+  "name": "Autonomyx Structured Data Parser",
+  "description": "Automated Python parser code generation from any data sample. Input: raw data (JSON, CSV, XML, YAML, log, plain text, paste, mixed). Output: structured JSON with ready-to-run Python parser code, detected schema, field mapping, and test cases. Routes to Qwen2.5-Coder-32B. For interactive code generation with iteration, use structured-data-parser skill in Claude.",
+  "data": {
+    "nodes": [
+      {
+        "id": "TextInput-data",
+        "type": "genericNode",
+        "data": {
+          "type": "TextInput",
+          "node": {
+            "template": {
+              "sample_data": {
+                "type": "str",
+                "required": true,
+                "display_name": "Sample Data",
+                "placeholder": "Paste your raw data here — JSON, CSV, XML, YAML, log lines, plain text, mixed, anything",
+                "show": true
+              },
+              "input_format": {
+                "type": "str",
+                "required": false,
+                "display_name": "Input Format",
+                "value": "auto-detect",
+                "placeholder": "json / csv / xml / yaml / toml / log / text / mixed / auto-detect",
+                "show": true
+              },
+              "output_format": {
+                "type": "str",
+                "required": false,
+                "display_name": "Target Output Format",
+                "value": "json",
+                "placeholder": "json / csv / dataframe / dict / custom",
+                "show": true
+              },
+              "extraction_goal": {
+                "type": "str",
+                "required": false,
+                "display_name": "What to Extract",
+                "placeholder": "e.g. extract all invoice numbers and amounts, get user emails, parse error codes from logs",
+                "value": "",
+                "show": true
+              },
+              "output_language": {
+                "type": "str",
+                "required": false,
+                "display_name": "Programming Language",
+                "value": "python",
+                "placeholder": "python / typescript / go",
+                "show": true
+              }
+            },
+            "display_name": "Data Input",
+            "description": "Raw data sample and parsing requirements"
+          }
+        },
+        "position": { "x": 80, "y": 300 }
+      },
+
+      {
+        "id": "Prompt-parser",
+        "type": "genericNode",
+        "data": {
+          "type": "Prompt",
+          "node": {
+            "template": {
+              "template": {
+                "type": "str",
+                "value": "You are an expert data engineer. Generate a production-ready parser for the following data sample.\n\nInput format: {input_format} (auto-detect if 'auto-detect')\nTarget output format: {output_format}\nProgramming language: {output_language}\nExtraction goal: {extraction_goal}\n\nSample data:\n```\n{sample_data}\n```\n\nReturn ONLY a valid JSON object with this structure:\n{{\n  \"detected_format\": \"json|csv|xml|yaml|toml|log|text|mixed\",\n  \"detected_schema\": {{\n    \"description\": \"plain English description of what the data contains\",\n    \"fields\": [\n      {{\"name\": \"field_name\", \"type\": \"str|int|float|bool|list|dict|datetime\", \"nullable\": true/false, \"example\": \"...\"}}\n    ],\n    \"record_count_in_sample\": <integer>\n  }},\n  \"parser_code\": \"complete runnable {output_language} code as a single string with \\\\n for newlines\",\n  \"dependencies\": [\"list of pip packages to install\"],\n  \"install_command\": \"pip install ...\",\n  \"usage_example\": \"how to call the parser with the sample data\",\n  \"test_cases\": [\n    {{\"description\": \"...\", \"input\": \"...\", \"expected_output\": \"...\"}}\n  ],\n  \"edge_cases_handled\": [\"list of edge cases the parser handles\"],\n  \"limitations\": [\"what the parser does NOT handle\"]\n}}\n\nParser code requirements:\n- Complete, runnable, no placeholders\n- Include type hints\n- Include docstring\n- Include error handling (try/except)\n- Include a main() function that demonstrates usage\n- For unstructured inputs (PDF, Word, HTML, logs, text): use the `unstructured` library\n- For structured inputs (JSON, CSV, XML, YAML): use standard libraries\n- Tests must be runnable with pytest\n\nReturn ONLY the JSON. No markdown fences. No explanation.",
+                "display_name": "Parser Generation Prompt",
+                "show": true
+              }
+            },
+            "display_name": "Parser Prompt",
+            "description": "Structured parser code generation prompt"
+          }
+        },
+        "position": { "x": 380, "y": 300 }
+      },
+
+      {
+        "id": "OpenAIModel-coder",
+        "type": "genericNode",
+        "data": {
+          "type": "OpenAIModel",
+          "node": {
+            "template": {
+              "openai_api_base": {
+                "type": "str",
+                "value": "http://litellm:4000/v1",
+                "display_name": "API Base",
+                "show": true
+              },
+              "openai_api_key": {
+                "type": "str",
+                "value": "{LANGFLOW_VIRTUAL_KEY}",
+                "display_name": "API Key",
+                "show": true,
+                "password": true
+              },
+              "model_name": {
+                "type": "str",
+                "value": "ollama/qwen2.5-coder:32b",
+                "display_name": "Model",
+                "show": true,
+                "info": "Qwen2.5-Coder-32B — best open code model (HumanEval+ 92.7%). Always used for code generation."
+              },
+              "temperature": {
+                "type": "float",
+                "value": 0.1,
+                "display_name": "Temperature",
+                "show": true,
+                "info": "Low temperature for deterministic, correct code"
+              },
+              "max_tokens": {
+                "type": "int",
+                "value": 4096,
+                "display_name": "Max Tokens",
+                "show": true
+              },
+              "json_mode": {
+                "type": "bool",
+                "value": true,
+                "display_name": "JSON Mode",
+                "show": true
+              }
+            },
+            "display_name": "Qwen2.5-Coder-32B",
+            "description": "Local code model — data never leaves your VPS"
+          }
+        },
+        "position": { "x": 680, "y": 300 }
+      },
+
+      {
+        "id": "TextOutput-parser",
+        "type": "genericNode",
+        "data": {
+          "type": "TextOutput",
+          "node": {
+            "template": {
+              "input_value": {
+                "type": "str",
+                "required": true,
+                "display_name": "Parser Output",
+                "show": true
+              }
+            },
+            "display_name": "Parser Code Output",
+            "description": "JSON containing ready-to-run parser code, schema, tests"
+          }
+        },
+        "position": { "x": 980, "y": 300 }
+      }
+    ],
+
+    "edges": [
+      {
+        "id": "edge-data-to-prompt",
+        "source": "TextInput-data",
+        "sourceHandle": "sample_data",
+        "target": "Prompt-parser",
+        "targetHandle": "sample_data"
+      },
+      {
+        "id": "edge-fmt-to-prompt",
+        "source": "TextInput-data",
+        "sourceHandle": "input_format",
+        "target": "Prompt-parser",
+        "targetHandle": "input_format"
+      },
+      {
+        "id": "edge-out-to-prompt",
+        "source": "TextInput-data",
+        "sourceHandle": "output_format",
+        "target": "Prompt-parser",
+        "targetHandle": "output_format"
+      },
+      {
+        "id": "edge-goal-to-prompt",
+        "source": "TextInput-data",
+        "sourceHandle": "extraction_goal",
+        "target": "Prompt-parser",
+        "targetHandle": "extraction_goal"
+      },
+      {
+        "id": "edge-lang-to-prompt",
+        "source": "TextInput-data",
+        "sourceHandle": "output_language",
+        "target": "Prompt-parser",
+        "targetHandle": "output_language"
+      },
+      {
+        "id": "edge-prompt-to-model",
+        "source": "Prompt-parser",
+        "sourceHandle": "prompt",
+        "target": "OpenAIModel-coder",
+        "targetHandle": "input_value"
+      },
+      {
+        "id": "edge-model-to-output",
+        "source": "OpenAIModel-coder",
+        "sourceHandle": "text",
+        "target": "TextOutput-parser",
+        "targetHandle": "input_value"
+      }
+    ],
+
+    "viewport": { "zoom": 0.75, "x": 0, "y": 0 }
+  },
+
+  "is_component": false,
+  "last_tested_version": "1.0",
+  "variables": [
+    {
+      "name": "LANGFLOW_VIRTUAL_KEY",
+      "type": "str",
+      "value": "sk-autonomyx-langflow-prod"
+    }
+  ],
+
+  "important_notes": [
+    "Always routes to Qwen2.5-Coder-32B — best open code model for parser generation",
+    "Sample data stays on your VPS — never sent to cloud",
+    "For PDF/Word/HTML inputs: generated code uses unstructured library",
+    "For structured inputs: uses standard Python libraries (json, csv, xml, yaml)",
+    "Generated code includes type hints, docstring, error handling, tests",
+    "For iterative refinement and multi-turn generation, use structured-data-parser skill in Claude"
+  ],
+
+  "api_example": {
+    "curl": "curl -X POST https://flows.openautonomyx.com/api/v1/run/{flow_id} \\\n  -H 'Authorization: Bearer lf-your-api-key' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"sample_data\": \"{\\\\\"invoice_id\\\\\": \\\\\"INV-001\\\\\", \\\\\"amount\\\\\": 5000, \\\\\"vendor\\\\\": \\\\\"Acme Ltd\\\\\"}\", \"extraction_goal\": \"extract invoice_id and amount into a list of dicts\"}'",
+    "response_shape": {
+      "detected_format": "json",
+      "detected_schema": {
+        "description": "Invoice records with ID, amount, and vendor name",
+        "fields": [
+          {"name": "invoice_id", "type": "str", "nullable": false, "example": "INV-001"},
+          {"name": "amount", "type": "int", "nullable": false, "example": "5000"},
+          {"name": "vendor", "type": "str", "nullable": false, "example": "Acme Ltd"}
+        ],
+        "record_count_in_sample": 1
+      },
+      "parser_code": "import json\nfrom typing import List, Dict\n\ndef parse_invoices(data: str) -> List[Dict]:\n    ...",
+      "dependencies": [],
+      "install_command": "",
+      "usage_example": "records = parse_invoices(open('invoices.json').read())",
+      "test_cases": [],
+      "edge_cases_handled": ["missing fields", "null values", "malformed JSON"],
+      "limitations": ["assumes single-level JSON", "no nested array handling"]
+    }
+  }
+}

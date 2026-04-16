@@ -64,6 +64,8 @@ Peak RAM: ~84GB. Runs on a 96GB VPS. No GPU required.
 | `code-review.json` | Qwen2.5-Coder-32B (always) | Code review → structured JSON: bugs, security, style, score |
 | `policy-creator.json` | Qwen3-30B-A3B (always) | Generate Privacy Policy, ToS, Cookie Policy — DPDP 2023 aware |
 | `policy-review.json` | Qwen3-30B-A3B (always) | Analyse vendor policy → 5-domain risk report + actions |
+| `feature-gap-analyzer.json` | Qwen3-30B-A3B (always) | Compare 2-3 products → scored feature matrix + gaps + recommendation |
+| `structured-data-parser.json` | Qwen2.5-Coder-32B (always) | Any data sample → Python parser code + schema + tests |
 
 Add your own flows to `flows/` — they load into Autonomyx Langflow on startup.
 

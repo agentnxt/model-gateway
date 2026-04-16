@@ -137,6 +137,10 @@ case "$TIER" in
 esac
 
 echo ""
+echo "[+] Pulling nomic-embed-text (RAG embeddings, 274MB)..."
+ollama pull nomic-embed-text
+echo "    Done."
+echo ""
 echo "============================================"
 echo " Pull complete."
 echo " Monitor: docker exec private-ollama ollama ps"

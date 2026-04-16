@@ -1,16 +1,49 @@
-name: CI + Deploy
+name: CI + Build + Deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+env:
+  REGISTRY: docker.io
+  ORG: thefractionalpm
+
 jobs:
 
-  # ── Job 1: Build and test all Docker images ───────────────────────────────
-  build:
-    name: Build & Test Docker Images
+  # ── Job 1: Test ────────────────────────────────────────────────────────────
+  test:
+    name: Run Tests
     runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install -r tests/requirements.txt
+
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Validate docker-compose.yml syntax
+        run: |
+          docker compose config --quiet
+          echo "docker-compose.yml syntax OK"
+
+  # ── Job 2: Build & Push Docker images ─────────────────────────────────────
+  build:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    needs: test        # only runs if tests pass
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -18,61 +51,60 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build playwright image
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract image tag (short SHA)
+        id: meta
+        run: echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build & push playwright
         uses: docker/build-push-action@v5
         with:
           context: ./playwright
           dockerfile: ./playwright/Dockerfile
-          push: false
-          tags: autonomyx-playwright:test
+          push: true
+          tags: |
+            ${{ env.ORG }}/autonomyx-playwright:${{ steps.meta.outputs.version }}
+            ${{ env.ORG }}/autonomyx-playwright:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      - name: Build classifier image
+      - name: Build & push classifier
         uses: docker/build-push-action@v5
         with:
           context: ./classifier
           dockerfile: ./classifier/Dockerfile
-          push: false
-          tags: autonomyx-classifier:test
+          push: true
+          tags: |
+            ${{ env.ORG }}/autonomyx-classifier:${{ steps.meta.outputs.version }}
+            ${{ env.ORG }}/autonomyx-classifier:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      - name: Build translator image
+      - name: Build & push translator
         uses: docker/build-push-action@v5
         with:
           context: ./translator
           dockerfile: ./translator/Dockerfile
-          push: false
-          tags: autonomyx-translator:test
+          push: true
+          tags: |
+            ${{ env.ORG }}/autonomyx-translator:${{ steps.meta.outputs.version }}
+            ${{ env.ORG }}/autonomyx-translator:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      - name: Validate config.yaml
-        run: |
-          pip install pyyaml
-          python3 -c "
-          import yaml, sys
-          with open('config.yaml') as f:
-              config = yaml.safe_load(f)
-          models = config.get('model_list', [])
-          assert len(models) > 0, 'model_list is empty'
-          for m in models:
-              assert 'model_name' in m, f'Missing model_name: {m}'
-              assert 'litellm_params' in m, f'Missing litellm_params: {m}'
-          print(f'config.yaml OK — {len(models)} models')
-          "
-
-      - name: Validate docker-compose.yml syntax
-        run: |
-          docker compose config --quiet
-          echo "docker-compose.yml syntax OK"
-
-  # ── Job 2: Deploy (only if build passes) ──────────────────────────────────
+  # ── Job 3: Deploy ──────────────────────────────────────────────────────────
   deploy:
     name: Deploy to vps.openautonomyx.com
     runs-on: ubuntu-latest
-    needs: build
+    needs: build       # only runs if build passes
 
     steps:
       - name: Deploy via SSH
@@ -91,13 +123,33 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "=== Removing version attribute ==="
+            echo "=== Removing obsolete version attribute ==="
             sed -i '/^version:/d' docker-compose.yml
 
-            echo "=== Starting services ==="
-            docker compose up -d --build --remove-orphans
+            echo "=== Pulling pre-built images from Docker Hub ==="
+            docker compose pull playwright classifier translator || true
 
-            echo "=== Service status ==="
+            echo "=== Starting all services ==="
+            docker compose up -d --remove-orphans
+
+            echo "=== Waiting for gateway to be ready ==="
+            for i in $(seq 1 12); do
+              if curl -sf -o /dev/null \
+                -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+                http://localhost:4000/health; then
+                echo "Gateway healthy after ${i}x5s"
+                break
+              fi
+              echo "Attempt $i/12 — waiting 5s..."
+              sleep 5
+              if [ $i -eq 12 ]; then
+                echo "ERROR: Gateway did not become healthy in 60s"
+                docker compose logs litellm --tail 30
+                exit 1
+              fi
+            done
+
+            echo "=== Final service status ==="
             docker compose ps
 
             echo "=== Deploy complete ==="

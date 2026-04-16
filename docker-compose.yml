@@ -70,7 +70,7 @@ services:
       - "traefik.http.services.litellm.loadbalancer.server.port=4000"
 
   litellm-db:
-    image: postgres:15-alpine
+    image: postgres:15.7-alpine
     container_name: autonomyx-litellm-db
     restart: always
     networks:
@@ -88,7 +88,7 @@ services:
       retries: 5
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.3.14
     container_name: autonomyx-ollama
     restart: always
     networks:
@@ -107,7 +107,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.53.0
     container_name: autonomyx-prometheus
     restart: always
     networks:
@@ -120,7 +120,7 @@ services:
       - "--storage.tsdb.retention.time=30d"
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.1.0
     container_name: autonomyx-grafana
     restart: always
     networks:
@@ -141,7 +141,7 @@ services:
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
   langflow:
-    image: langflowai/langflow:latest
+    image: langflowai/langflow:1.0.19
     container_name: autonomyx-langflow
     restart: always
     networks:
@@ -171,7 +171,7 @@ services:
       - "traefik.http.services.langflow.loadbalancer.server.port=7860"
 
   langflow-db:
-    image: postgres:15-alpine
+    image: postgres:15.7-alpine
     container_name: autonomyx-langflow-db
     restart: always
     networks:

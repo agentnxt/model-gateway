@@ -7,201 +7,195 @@ networks:
     external: true
 
 volumes:
-  litellm-db-data:
+  postgres-data:
   prometheus-data:
   grafana-data:
   langflow-data:
-  langflow-db-data:
   ollama-data:
   victorialogs-data:
   jaeger-data:
   otel-data:
   dockge-data:
   surrealdb-data:
-  openfga-db-data:
-  glitchtip-db-data:
   glitchtip-uploads:
+  caddy-data:
+  caddy-config:
 
 services:
 
+
+# ── Shared Postgres (replaces 4 separate instances — same isolation, ¼ RAM)
+#    init.sql creates all databases + users on first start
+  postgres:
+    image: postgres:15.7-alpine
+    container_name: autonomyx-postgres
+    restart: always
+    networks:
+    - coolify
+    environment:
+    - POSTGRES_USER=autonomyx
+    - POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+    - POSTGRES_DB=postgres
+    - '# App passwords — used by init.sh to create per-app users'
+    - LITELLM_DB_PASSWORD=${POSTGRES_PASSWORD}
+    - LANGFLOW_DB_PASSWORD=${LANGFLOW_DB_PASSWORD}
+    - OPENFGA_DB_PASSWORD=${OPENFGA_DB_PASSWORD}
+    - GLITCHTIP_DB_PASSWORD=${GLITCHTIP_DB_PASSWORD}
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U autonomyx
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+    - traefik.enable=false
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     container_name: autonomyx-litellm
     restart: always
     networks:
-      - coolify
+    - coolify
     environment:
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD}@litellm-db:5432/litellm
-      - STORE_MODEL_IN_DB=True
-      - LITELLM_UI_USERNAME=${LITELLM_UI_USERNAME:-admin}
-      - LITELLM_UI_PASSWORD=${LITELLM_UI_PASSWORD:-autonomyx}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
-      - FIREWORKS_API_KEY=${FIREWORKS_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - AZURE_API_KEY=${AZURE_API_KEY}
-      - AZURE_API_BASE=${AZURE_API_BASE}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-ap-south-1}
-      - HF_TOKEN=${HF_TOKEN}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/vertex_key.json
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://traces.openautonomyx.com}
-      - LAGO_API_URL=${LAGO_API_URL:-https://billing.openautonomyx.com}
-      - LAGO_API_KEY=${LAGO_API_KEY}
-      - CLASSIFIER_URL=http://classifier:8100
-      - RECOMMENDER_MODE=local
+    - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD}@postgres:5432/litellm
+    - STORE_MODEL_IN_DB=True
+    - LITELLM_UI_USERNAME=${LITELLM_UI_USERNAME:-admin}
+    - LITELLM_UI_PASSWORD=${LITELLM_UI_PASSWORD:-autonomyx}
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    - GEMINI_API_KEY=${GEMINI_API_KEY}
+    - GROQ_API_KEY=${GROQ_API_KEY}
+    - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+    - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+    - FIREWORKS_API_KEY=${FIREWORKS_API_KEY}
+    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    - AZURE_API_KEY=${AZURE_API_KEY}
+    - AZURE_API_BASE=${AZURE_API_BASE}
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    - AWS_REGION=${AWS_REGION:-ap-south-1}
+    - HF_TOKEN=${HF_TOKEN}
+    - GOOGLE_APPLICATION_CREDENTIALS=/app/vertex_key.json
+    - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+    - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+    - LANGFUSE_HOST=${LANGFUSE_HOST:-https://traces.openautonomyx.com}
+    - LAGO_API_URL=${LAGO_API_URL:-https://billing.openautonomyx.com}
+    - LAGO_API_KEY=${LAGO_API_KEY}
+    - CLASSIFIER_URL=http://classifier:8100
+    - RECOMMENDER_MODE=local
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./lago_callback.py:/app/lago_callback.py:ro
-      - ./recommender.py:/app/recommender.py:ro
-      - ./feedback.py:/app/feedback.py:ro
-      - ./vertex_key.json:/app/vertex_key.json:ro
+    - ./config.yaml:/app/config.yaml:ro
+    - ./lago_callback.py:/app/lago_callback.py:ro
+    - ./recommender.py:/app/recommender.py:ro
+    - ./feedback.py:/app/feedback.py:ro
+    - ./vertex_key.json:/app/vertex_key.json:ro
     command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8"]
     depends_on:
-      litellm-db:
+      postgres:
         condition: service_healthy
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+    - "host.docker.internal:host-gateway"
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.litellm.rule=Host(`llm.openautonomyx.com`)"
-      - "traefik.http.routers.litellm.entrypoints=https"
-      - "traefik.http.routers.litellm.tls.certresolver=letsencrypt"
-      - "traefik.http.services.litellm.loadbalancer.server.port=4000"
-
-  litellm-db:
-    image: postgres:15.7-alpine
-    container_name: autonomyx-litellm-db
-    restart: always
-    networks:
-      - coolify
-    environment:
-      - POSTGRES_USER=litellm
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=litellm
-    volumes:
-      - litellm-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U litellm"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    - "traefik.enable=true"
+    - "traefik.http.routers.litellm.rule=Host(`llm.openautonomyx.com`)"
+    - "traefik.http.routers.litellm.entrypoints=https"
+    - "traefik.http.routers.litellm.tls.certresolver=letsencrypt"
+    - "traefik.http.services.litellm.loadbalancer.server.port=4000"
 
   ollama:
     image: ollama/ollama:0.3.14
     container_name: autonomyx-ollama
     restart: always
     networks:
-      - coolify
+    - coolify
     volumes:
-      - ollama-data:/root/.ollama
-      - ./ollama-pull.sh:/ollama-pull.sh:ro
+    - ollama-data:/root/.ollama
+    - ./ollama-pull.sh:/ollama-pull.sh:ro
     environment:
-      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-4}
-      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-4}
-      - OLLAMA_FLASH_ATTENTION=1
-      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+    - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-4}
+    - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-4}
+    - OLLAMA_FLASH_ATTENTION=1
+    - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
     mem_limit: ${OLLAMA_MEM_LIMIT:-76g}
     memswap_limit: ${OLLAMA_MEM_LIMIT:-76g}
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+    - "host.docker.internal:host-gateway"
 
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: autonomyx-prometheus
     restart: always
     networks:
-      - coolify
+    - coolify
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - prometheus-data:/prometheus
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=30d"
+    - "--config.file=/etc/prometheus/prometheus.yml"
+    - "--storage.tsdb.retention.time=30d"
 
   grafana:
     image: grafana/grafana:11.1.0
     container_name: autonomyx-grafana
     restart: always
     networks:
-      - coolify
+    - coolify
     environment:
-      - GF_ANALYTICS_REPORTING_ENABLED=false
-      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
-      - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
-      - GF_SECURITY_DISABLE_GRAVATAR=true
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-autonomyx}
-      - LANGFUSE_DB_PASSWORD=${LANGFUSE_DB_PASSWORD}
+    - GF_ANALYTICS_REPORTING_ENABLED=false
+    - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+    - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
+    - GF_SECURITY_DISABLE_GRAVATAR=true
+    - GF_USERS_ALLOW_SIGN_UP=false
+    - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+    - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-autonomyx}
+    - LANGFUSE_DB_PASSWORD=${LANGFUSE_DB_PASSWORD}
     volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    - grafana-data:/var/lib/grafana
+    - ./grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_started
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`metrics.openautonomyx.com`)"
-      - "traefik.http.routers.grafana.entrypoints=https"
-      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
-      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    - "traefik.enable=true"
+    - "traefik.http.routers.grafana.rule=Host(`metrics.openautonomyx.com`)"
+    - "traefik.http.routers.grafana.entrypoints=https"
+    - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+    - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
   langflow:
     image: langflowai/langflow:1.0.19
     container_name: autonomyx-langflow
     restart: always
     networks:
-      - coolify
+    - coolify
     environment:
-      - DO_NOT_TRACK=true
-      - LANGFLOW_TELEMETRY_ENABLED=false
-      - LANGFLOW_AUTO_LOGIN=false
-      - LANGFLOW_DATABASE_URL=postgresql://langflow:${LANGFLOW_DB_PASSWORD}@langflow-db:5432/langflow
-      - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
-      - LANGFLOW_SUPERUSER=${LANGFLOW_ADMIN_EMAIL:-admin@openautonomyx.com}
-      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_ADMIN_PASSWORD}
-      - OPENAI_API_BASE=http://litellm:4000/v1
-      - OPENAI_API_KEY=${LANGFLOW_VIRTUAL_KEY}
-      - LANGFLOW_STORE=false
-      - LANGFLOW_LOG_LEVEL=warning
+    - DO_NOT_TRACK=true
+    - LANGFLOW_TELEMETRY_ENABLED=false
+    - LANGFLOW_AUTO_LOGIN=false
+    - LANGFLOW_DATABASE_URL=postgresql://langflow:${LANGFLOW_DB_PASSWORD}@postgres:5432/langflow
+    - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
+    - LANGFLOW_SUPERUSER=${LANGFLOW_ADMIN_EMAIL:-admin@openautonomyx.com}
+    - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_ADMIN_PASSWORD}
+    - OPENAI_API_BASE=http://litellm:4000/v1
+    - OPENAI_API_KEY=${LANGFLOW_VIRTUAL_KEY}
+    - LANGFLOW_STORE=false
+    - LANGFLOW_LOG_LEVEL=warning
     depends_on:
-      langflow-db:
+      postgres:
         condition: service_healthy
     volumes:
-      - langflow-data:/app/langflow
-      - ./flows:/app/flows:ro
+    - langflow-data:/app/langflow
+    - ./flows:/app/flows:ro
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.langflow.rule=Host(`flows.openautonomyx.com`)"
-      - "traefik.http.routers.langflow.entrypoints=https"
-      - "traefik.http.routers.langflow.tls.certresolver=letsencrypt"
-      - "traefik.http.services.langflow.loadbalancer.server.port=7860"
-
-  langflow-db:
-    image: postgres:15.7-alpine
-    container_name: autonomyx-langflow-db
-    restart: always
-    networks:
-      - coolify
-    environment:
-      - POSTGRES_USER=langflow
-      - POSTGRES_PASSWORD=${LANGFLOW_DB_PASSWORD}
-      - POSTGRES_DB=langflow
-    volumes:
-      - langflow-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U langflow"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    - "traefik.enable=true"
+    - "traefik.http.routers.langflow.rule=Host(`flows.openautonomyx.com`)"
+    - "traefik.http.routers.langflow.entrypoints=https"
+    - "traefik.http.routers.langflow.tls.certresolver=letsencrypt"
+    - "traefik.http.services.langflow.loadbalancer.server.port=7860"
 
   classifier:
     build:
@@ -210,7 +204,7 @@ services:
     container_name: autonomyx-classifier
     restart: always
     networks:
-      - coolify
+    - coolify
 
   translator:
     build:
@@ -219,7 +213,7 @@ services:
     container_name: autonomyx-translator
     restart: always
     networks:
-      - coolify
+    - coolify
 
   playwright:
     build:
@@ -228,20 +222,20 @@ services:
     container_name: autonomyx-playwright
     restart: always
     networks:
-      - coolify
+    - coolify
     environment:
-      - LITELLM_URL=http://litellm:4000
-      - LITELLM_KEY=${LITELLM_MASTER_KEY}
-      - OLLAMA_URL=http://ollama:11434
-      - EMBED_MODEL=nomic-embed-text
-      - EXTRACT_MODEL=ollama/qwen3:30b-a3b
-      - SURREAL_URL=${SURREAL_URL}
-      - SURREAL_USER=${SURREAL_USER}
-      - SURREAL_PASS=${SURREAL_PASS}
-      - SURREAL_NS=${SURREAL_NS:-autonomyx}
-      - SURREAL_DB=${SURREAL_DB:-scrapes}
-      - MAX_PAGES=50
-      - CHUNK_SIZE=512
+    - LITELLM_URL=http://litellm:4000
+    - LITELLM_KEY=${LITELLM_MASTER_KEY}
+    - OLLAMA_URL=http://ollama:11434
+    - EMBED_MODEL=nomic-embed-text
+    - EXTRACT_MODEL=ollama/qwen3:30b-a3b
+    - SURREAL_URL=${SURREAL_URL}
+    - SURREAL_USER=${SURREAL_USER}
+    - SURREAL_PASS=${SURREAL_PASS}
+    - SURREAL_NS=${SURREAL_NS:-autonomyx}
+    - SURREAL_DB=${SURREAL_DB:-scrapes}
+    - MAX_PAGES=50
+    - CHUNK_SIZE=512
     shm_size: '256m'
     deploy:
       resources:
@@ -249,7 +243,7 @@ services:
           memory: 2g
           cpus: '1.0'
     labels:
-      - "traefik.enable=false"
+    - "traefik.enable=false"
 
 
 
@@ -261,22 +255,22 @@ services:
     container_name: autonomyx-surrealdb
     restart: always
     networks:
-      - coolify
+    - coolify
     command:
-      - start
-      - --log=warn
-      - --user=${SURREAL_USER}
-      - --pass=${SURREAL_PASS}
-      - rocksdb:/data/surreal.db
+    - start
+    - --log=warn
+    - --user=${SURREAL_USER}
+    - --pass=${SURREAL_PASS}
+    - rocksdb:/data/surreal.db
     volumes:
-      - surrealdb-data:/data
+    - surrealdb-data:/data
     healthcheck:
       test: ["CMD", "/surreal", "is-ready", "--conn", "http://localhost:8000"]
       interval: 15s
       timeout: 5s
       retries: 5
     labels:
-      - "traefik.enable=false"   # internal only
+    - "traefik.enable=false"     # internal only
 
 
 
@@ -295,11 +289,11 @@ services:
     container_name: autonomyx-frpc
     restart: always
     networks:
-      - coolify
+    - coolify
     volumes:
-      - ./frp/frpc.toml:/etc/frp/frpc.toml:ro
+    - ./frp/frpc.toml:/etc/frp/frpc.toml:ro
     labels:
-      - "traefik.enable=false"
+    - "traefik.enable=false"
 
   # ── Dockge (Docker Compose stack manager UI) ─────────────────────────────
   dockge:
@@ -307,16 +301,16 @@ services:
     container_name: autonomyx-dockge
     restart: always
     networks:
-      - coolify
+    - coolify
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - dockge-data:/app/data
+    - /var/run/docker.sock:/var/run/docker.sock
+    - dockge-data:/app/data
       # Stacks dir: host path MUST equal container path
-      - /home/ubuntu:/home/ubuntu:ro
+    - /home/ubuntu:/home/ubuntu:ro
     environment:
-      - DOCKGE_STACKS_DIR=/home/ubuntu
+    - DOCKGE_STACKS_DIR=/home/ubuntu
     labels:
-      - "traefik.enable=false"   # Cloudflare Tunnel handles routing
+    - "traefik.enable=false"     # Cloudflare Tunnel handles routing
 
 
   # ── OpenTelemetry Stack (self-hosted telemetry — no data leaves VPS) ──────
@@ -328,208 +322,222 @@ services:
     container_name: autonomyx-otel-collector
     restart: always
     networks:
-      - coolify
+    - coolify
     command: ["--config", "/etc/otel/collector.yaml"]
     volumes:
-      - ./otel/collector.yaml:/etc/otel/collector.yaml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+    - ./otel/collector.yaml:/etc/otel/collector.yaml:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
-      - "traefik.enable=false"
+    - "traefik.enable=false"
 
   victorialogs:
     image: victoriametrics/victoria-logs:v1.50.0
     container_name: autonomyx-victorialogs
     restart: always
     networks:
-      - coolify
+    - coolify
     command:
-      - -storageDataPath=/victoria-logs-data
-      - -retentionPeriod=30d
-      - -logInternalErrors=false
+    - -storageDataPath=/victoria-logs-data
+    - -retentionPeriod=30d
+    - -logInternalErrors=false
     volumes:
-      - victorialogs-data:/victoria-logs-data
+    - victorialogs-data:/victoria-logs-data
     labels:
-      - "traefik.enable=false"
+    - "traefik.enable=false"
 
   jaeger:
     image: jaegertracing/jaeger:2.4.0
     container_name: autonomyx-jaeger
     restart: always
     networks:
-      - coolify
+    - coolify
     command: ["--config", "/etc/jaeger/config.yaml"]
     environment:
-      - OTEL_ENABLED=true
+    - OTEL_ENABLED=true
     volumes:
-      - ./jaeger/config.yaml:/etc/jaeger/config.yaml:ro
-      - ./jaeger/jaeger-ui.json:/etc/jaeger/jaeger-ui.json:ro
-      - jaeger-data:/badger
+    - ./jaeger/config.yaml:/etc/jaeger/config.yaml:ro
+    - ./jaeger/jaeger-ui.json:/etc/jaeger/jaeger-ui.json:ro
+    - jaeger-data:/badger
     labels:
-      - "traefik.enable=false"
+    - "traefik.enable=false"
 
   # ── Trust Centre (trust.openautonomyx.com) ───────────────────────────────
   trust:
-    image: nginx:1.27-alpine
+    image: caddy:2.8-alpine
     container_name: autonomyx-trust
     restart: always
     networks:
-      - coolify
+    - coolify
     volumes:
-      - ./trust:/usr/share/nginx/html:ro
-      - ./trust/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    - ./trust/index.html:/srv/index.html:ro
+    - ./trust/Caddyfile:/etc/caddy/Caddyfile:ro
+    - caddy-data:/data
+    - caddy-config:/config
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.trust.rule=Host(`trust.openautonomyx.com`)"
-      - "traefik.http.routers.trust.entrypoints=https"
-      - "traefik.http.routers.trust.tls.certresolver=letsencrypt"
-      - "traefik.http.services.trust.loadbalancer.server.port=80"
-
-  # ── OPA (conditional policy engine) ──────────────────────────────────────
+    - traefik.enable=false
   opa:
     image: openpolicyagent/opa:0.70.0-static
     container_name: autonomyx-opa
     restart: always
     networks:
-      - coolify
+    - coolify
     command:
-      - run
-      - --server
-      - --addr=0.0.0.0:8181
-      - --log-format=json
-      - --log-level=warn
-      - /policies
+    - run
+    - --server
+    - --addr=0.0.0.0:8181
+    - --log-format=json
+    - --log-level=warn
+    - /policies
     volumes:
-      - ./opa:/policies:ro
+    - ./opa:/policies:ro
     labels:
-      - "traefik.enable=false"   # internal only
+    - "traefik.enable=false"     # internal only
 
 
 
   # ── OPA (conditional policy engine) ──────────────────────────────────────────
-  openfga-db:
-    image: postgres:15.7-alpine
-    container_name: autonomyx-openfga-db
-    restart: always
-    networks:
-      - coolify
-    environment:
-      - POSTGRES_USER=openfga
-      - POSTGRES_PASSWORD=${OPENFGA_DB_PASSWORD}
-      - POSTGRES_DB=openfga
-    volumes:
-      - openfga-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openfga"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    labels:
-      - "traefik.enable=false"
-
   openfga:
     image: openfga/openfga:v1.8.0
     container_name: autonomyx-openfga
     restart: always
     networks:
-      - coolify
+    - coolify
     depends_on:
-      openfga-db:
+      postgres:
         condition: service_healthy
-    command: run --datastore-engine=postgres --datastore-uri=postgres://openfga:${OPENFGA_DB_PASSWORD}@openfga-db:5432/openfga?sslmode=disable
+    command: run --datastore-engine=postgres 
+      --datastore-uri=postgres://openfga:${OPENFGA_DB_PASSWORD}@openfga-db:5432/openfga?sslmode=disable
     environment:
-      - OPENFGA_DATASTORE_ENGINE=postgres
-      - OPENFGA_DATASTORE_URI=postgres://openfga:${OPENFGA_DB_PASSWORD}@openfga-db:5432/openfga?sslmode=disable
-      - OPENFGA_AUTHN_METHOD=preshared
-      - OPENFGA_AUTHN_PRESHARED_KEYS=${OPENFGA_PRESHARED_KEY}
-      - OPENFGA_LOG_FORMAT=json
-      - OPENFGA_LOG_LEVEL=warn
-      - OPENFGA_PLAYGROUND_ENABLED=false
+    - OPENFGA_DATASTORE_ENGINE=postgres
+    - OPENFGA_DATASTORE_URI=postgres://openfga:${OPENFGA_DB_PASSWORD}@postgres:5432/openfga?sslmode=disable
+    - OPENFGA_AUTHN_METHOD=preshared
+    - OPENFGA_AUTHN_PRESHARED_KEYS=${OPENFGA_PRESHARED_KEY}
+    - OPENFGA_LOG_FORMAT=json
+    - OPENFGA_LOG_LEVEL=warn
+    - OPENFGA_PLAYGROUND_ENABLED=false
     labels:
-      - "traefik.enable=false"   # internal only — accessed by LiteLLM sidecar
+    - "traefik.enable=false"     # internal only — accessed by LiteLLM sidecar
 
   # ── GlitchTip (error tracking) ────────────────────────────────────────────
+  backup:
+# Runs daily via cron — uploads to S3-compatible storage
+#    Skip by not setting BACKUP_S3_ENDPOINT in .env
+    image: amazon/aws-cli:2.15.0
+    container_name: autonomyx-backup
+    restart: always
+    networks:
+    - coolify
+    entrypoint:
+    - sh
+    - -c
+    - crond -f -l 8
+    environment:
+    - S3_ENDPOINT=${BACKUP_S3_ENDPOINT}
+    - S3_BUCKET=${BACKUP_S3_BUCKET}
+    - AWS_ACCESS_KEY_ID=${BACKUP_AWS_ACCESS_KEY_ID}
+    - AWS_SECRET_ACCESS_KEY=${BACKUP_AWS_SECRET_ACCESS_KEY}
+    - POSTGRES_ROOT_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+    - POSTGRES_USER=autonomyx
+    - SURREAL_USER=${SURREAL_USER}
+    - SURREAL_PASS=${SURREAL_PASS}
+    volumes:
+    - ./backup/backup.sh:/etc/periodic/daily/backup:ro
+    - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+    - traefik.enable=false
   glitchtip:
     image: glitchtip/glitchtip:6.1.5
     container_name: autonomyx-glitchtip
     restart: always
     networks:
-      - coolify
+    - coolify
     depends_on:
-      glitchtip-db:
+      postgres:
         condition: service_healthy
       glitchtip-redis:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip
-      - REDIS_URL=redis://glitchtip-redis:6379/0
-      - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
-      - PORT=8000
-      - GLITCHTIP_DOMAIN=https://errors.openautonomyx.com
-      - DEFAULT_FROM_EMAIL=errors@openautonomyx.com
-      - CELERY_WORKER_AUTOSCALE=1,3
-      - CELERY_WORKER_MAX_TASKS_PER_CHILD=10000
-      - ENABLE_USER_REGISTRATION=False
-      - ENABLE_ORGANIZATION_CREATION=False
+    - DATABASE_URL=postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@postgres:5432/glitchtip
+    - REDIS_URL=redis://glitchtip-redis:6379/0
+    - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
+    - PORT=8000
+    - GLITCHTIP_DOMAIN=https://errors.openautonomyx.com
+    - DEFAULT_FROM_EMAIL=errors@openautonomyx.com
+    - CELERY_WORKER_AUTOSCALE=1,3
+    - CELERY_WORKER_MAX_TASKS_PER_CHILD=10000
+    - ENABLE_USER_REGISTRATION=False
+    - ENABLE_ORGANIZATION_CREATION=False
     volumes:
-      - glitchtip-uploads:/code/uploads
+    - glitchtip-uploads:/code/uploads
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.glitchtip.rule=Host(`errors.openautonomyx.com`)"
-      - "traefik.http.routers.glitchtip.entrypoints=https"
-      - "traefik.http.routers.glitchtip.tls.certresolver=letsencrypt"
-      - "traefik.http.services.glitchtip.loadbalancer.server.port=8000"
+    - "traefik.enable=true"
+    - "traefik.http.routers.glitchtip.rule=Host(`errors.openautonomyx.com`)"
+    - "traefik.http.routers.glitchtip.entrypoints=https"
+    - "traefik.http.routers.glitchtip.tls.certresolver=letsencrypt"
+    - "traefik.http.services.glitchtip.loadbalancer.server.port=8000"
 
   glitchtip-worker:
     image: glitchtip/glitchtip:6.1.5
     container_name: autonomyx-glitchtip-worker
     restart: always
     networks:
-      - coolify
+    - coolify
     depends_on:
-      glitchtip-db:
+      postgres:
         condition: service_healthy
       glitchtip-redis:
         condition: service_healthy
     command: ./bin/run-celery-with-beat.sh
     environment:
-      - DATABASE_URL=postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip
-      - REDIS_URL=redis://glitchtip-redis:6379/0
-      - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
-      - CELERY_WORKER_AUTOSCALE=1,3
-      - CELERY_WORKER_MAX_TASKS_PER_CHILD=10000
+    - DATABASE_URL=postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@postgres:5432/glitchtip
+    - REDIS_URL=redis://glitchtip-redis:6379/0
+    - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
+    - CELERY_WORKER_AUTOSCALE=1,3
+    - CELERY_WORKER_MAX_TASKS_PER_CHILD=10000
     labels:
-      - "traefik.enable=false"
-
-  glitchtip-db:
-    image: postgres:15.7-alpine
-    container_name: autonomyx-glitchtip-db
-    restart: always
-    networks:
-      - coolify
-    environment:
-      - POSTGRES_USER=glitchtip
-      - POSTGRES_PASSWORD=${GLITCHTIP_DB_PASSWORD}
-      - POSTGRES_DB=glitchtip
-    volumes:
-      - glitchtip-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U glitchtip"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    labels:
-      - "traefik.enable=false"
+    - "traefik.enable=false"
 
   glitchtip-redis:
     image: valkey/valkey:8.1-alpine
     container_name: autonomyx-glitchtip-redis
     restart: always
     networks:
-      - coolify
+    - coolify
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     labels:
-      - "traefik.enable=false"
+    - "traefik.enable=false"
+  infisical:
+    image: infisical/infisical:latest-postgres
+    container_name: autonomyx-infisical
+    restart: always
+    networks:
+    - coolify
+    environment:
+    - ENCRYPTION_KEY=${INFISICAL_ENCRYPTION_KEY}
+    - AUTH_SECRET=${INFISICAL_AUTH_SECRET}
+    - DB_CONNECTION_URI=postgresql://infisical:${INFISICAL_DB_PASSWORD}@postgres:5432/infisical
+    - REDIS_URL=redis://infisical-redis:6379
+    - SITE_URL=https://secrets.openautonomyx.com
+    - TELEMETRY_ENABLED=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      infisical-redis:
+        condition: service_started
+    labels:
+    - traefik.enable=false
+  infisical-redis:
+    image: valkey/valkey:8.1-alpine
+    container_name: autonomyx-infisical-redis
+    restart: always
+    networks:
+    - coolify
+    labels:
+    - traefik.enable=false

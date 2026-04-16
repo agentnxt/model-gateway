@@ -183,6 +183,14 @@ jobs:
           timeout: 120s
           script: |
             set -e
+            export DEBIAN_FRONTEND=noninteractive
+            echo "Updating package lists..."
+            apt-get update -qq
+            echo "Upgrading system packages (security patches)..."
+            apt-get upgrade -y -qq               -o Dpkg::Options::="--force-confdef"               -o Dpkg::Options::="--force-confold"
+            apt-get autoremove -y -qq
+            echo "System packages up to date"
+
             if ! command -v docker &>/dev/null; then
               echo "Docker not found — installing..."
               install -m 0755 -d /etc/apt/keyrings

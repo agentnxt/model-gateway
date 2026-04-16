@@ -22,21 +22,68 @@ echo "║     Fresh Ubuntu 24.04 VPS setup                        ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
-# ── System packages ───────────────────────────────────────────────────────────
-echo "── Step 1/6: System packages ────────────────────────────"
+# ── System update + upgrade ───────────────────────────────────────────────────
+echo "── Step 1/7: System update + upgrade ────────────────────"
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
+echo "  Upgrading packages (this may take a few minutes)..."
+apt-get upgrade -y -qq \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold"
+apt-get autoremove -y -qq
+apt-get autoclean -qq
+echo "  ✅ System upgraded"
+echo ""
+
+# ── System packages ───────────────────────────────────────────────────────────
+echo "── Step 2/7: System packages ────────────────────────────"
 apt-get install -y -qq \
   curl wget git ca-certificates gnupg \
   python3 python3-pip \
   openssl \
   jq \
-  unzip
+  unzip \
+  unattended-upgrades \
+  apt-listchanges
 
+# Configure unattended security upgrades
+cat > /etc/apt/apt.conf.d/20auto-upgrades << 'APTEOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APTEOF
+
+cat > /etc/apt/apt.conf.d/50unattended-upgrades << 'APTEOF'
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}";
+    "${distro_id}:${distro_codename}-security";
+    "${distro_id}ESMApps:${distro_codename}-apps-security";
+    "${distro_id}ESM:${distro_codename}-infra-security";
+};
+Unattended-Upgrade::Package-Blacklist {
+    "docker-ce";
+    "docker-ce-cli";
+    "containerd.io";
+    "docker-buildx-plugin";
+    "docker-compose-plugin";
+};
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Mail "chinmay@openautonomyx.com";
+Unattended-Upgrade::MailReport "on-change";
+APTEOF
+
+systemctl enable unattended-upgrades
+systemctl restart unattended-upgrades
 echo "  ✅ System packages installed"
+echo "  ✅ Unattended security upgrades configured (Docker pinned — updated via CI only)"
 echo ""
 
 # ── Docker ────────────────────────────────────────────────────────────────────
-echo "── Step 2/6: Docker ─────────────────────────────────────"
+echo "── Step 3/7: Docker ─────────────────────────────────────"
 if command -v docker &>/dev/null; then
   DOCKER_VER=$(docker --version)
   echo "  ⏭  Docker already installed: $DOCKER_VER"
@@ -71,7 +118,7 @@ fi
 echo ""
 
 # ── SSH key for CI/CD ─────────────────────────────────────────────────────────
-echo "── Step 3/6: SSH authorized_keys ────────────────────────"
+echo "── Step 4/7: SSH authorized_keys ────────────────────────"
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 touch /root/.ssh/authorized_keys
@@ -92,7 +139,7 @@ fi
 echo ""
 
 # ── Clone repo ────────────────────────────────────────────────────────────────
-echo "── Step 4/6: Clone repository ───────────────────────────"
+echo "── Step 5/7: Clone repository ───────────────────────────"
 if [ -d "$DEPLOY_DIR/.git" ]; then
   echo "  ⏭  Repo already cloned at $DEPLOY_DIR"
 else
@@ -106,7 +153,7 @@ chown -R "$DEPLOY_USER:$DEPLOY_USER" "$DEPLOY_DIR" 2>/dev/null || true
 echo ""
 
 # ── .env file ─────────────────────────────────────────────────────────────────
-echo "── Step 5/6: Environment file ───────────────────────────"
+echo "── Step 6/7: Environment file ───────────────────────────"
 if [ -f "$DEPLOY_DIR/.env" ]; then
   echo "  ⏭  .env already exists"
 else
@@ -117,7 +164,7 @@ fi
 echo ""
 
 # ── Firewall ──────────────────────────────────────────────────────────────────
-echo "── Step 6/6: Firewall (ufw) ─────────────────────────────"
+echo "── Step 7/7: Firewall (ufw) ─────────────────────────────"
 if command -v ufw &>/dev/null; then
   ufw --force enable || true
   ufw allow ssh    comment "SSH"    2>/dev/null || true

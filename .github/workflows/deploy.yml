@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: CI + Deploy
 
 on:
   push:
@@ -6,9 +6,73 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  # ── Job 1: Build and test all Docker images ───────────────────────────────
+  build:
+    name: Build & Test Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build playwright image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./playwright
+          dockerfile: ./playwright/Dockerfile
+          push: false
+          tags: autonomyx-playwright:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build classifier image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./classifier
+          dockerfile: ./classifier/Dockerfile
+          push: false
+          tags: autonomyx-classifier:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build translator image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./translator
+          dockerfile: ./translator/Dockerfile
+          push: false
+          tags: autonomyx-translator:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Validate config.yaml
+        run: |
+          pip install pyyaml
+          python3 -c "
+          import yaml, sys
+          with open('config.yaml') as f:
+              config = yaml.safe_load(f)
+          models = config.get('model_list', [])
+          assert len(models) > 0, 'model_list is empty'
+          for m in models:
+              assert 'model_name' in m, f'Missing model_name: {m}'
+              assert 'litellm_params' in m, f'Missing litellm_params: {m}'
+          print(f'config.yaml OK — {len(models)} models')
+          "
+
+      - name: Validate docker-compose.yml syntax
+        run: |
+          docker compose config --quiet
+          echo "docker-compose.yml syntax OK"
+
+  # ── Job 2: Deploy (only if build passes) ──────────────────────────────────
   deploy:
     name: Deploy to vps.openautonomyx.com
     runs-on: ubuntu-latest
+    needs: build
 
     steps:
       - name: Deploy via SSH
@@ -17,7 +81,7 @@ jobs:
           host: vps.openautonomyx.com
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          timeout: 300s
+          timeout: 600s
           script: |
             set -e
 
@@ -27,8 +91,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "=== Updating compose file ==="
-            # Ensure no version attribute
+            echo "=== Removing version attribute ==="
             sed -i '/^version:/d' docker-compose.yml
 
             echo "=== Starting services ==="

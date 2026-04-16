@@ -50,3 +50,60 @@ def test_no_duplicate_keys(compose_file):
         strict_load(str(path))
     except yaml.constructor.ConstructorError as e:
         pytest.fail(f"Duplicate key in {compose_file}: {e}")
+
+
+# ── Docker Compose schema + structural validation ─────────────────────────────
+import subprocess
+import shutil
+
+@pytest.mark.parametrize("compose_file", [
+    "docker-compose.yml",
+    "docker-compose.business.yml",
+])
+def test_compose_config_valid(compose_file):
+    """Runs 'docker compose config --quiet' — catches schema + structural errors
+    that PyYAML parsing alone misses (duplicate keys, bad references, etc.).
+    Skipped automatically if Docker is not installed (e.g. in CI lint jobs)."""
+    if not shutil.which("docker"):
+        pytest.skip("docker not installed — skipping compose validation")
+
+    # Check docker compose is functional (not a stub/mock)
+    check = subprocess.run(
+        ["docker", "compose", "version"],
+        capture_output=True, text=True
+    )
+    if check.returncode != 0 or "version" not in check.stdout.lower():
+        pytest.skip("docker compose not functional — skipping compose validation")
+
+    root = Path(__file__).parent.parent
+    path = root / compose_file
+    if not path.exists():
+        pytest.skip(f"{compose_file} not found")
+
+    # Create a minimal .env so compose doesn't complain about missing vars
+    env_example = root / ".env.example"
+    env_file = root / ".env.test"
+    if env_example.exists() and not env_file.exists():
+        # Strip values, keep keys with empty defaults
+        lines = []
+        for line in env_example.read_text().splitlines():
+            if line.startswith("#") or "=" not in line:
+                lines.append(line)
+            else:
+                key = line.split("=")[0]
+                lines.append(f"{key}=test_placeholder")
+        env_file.write_text("\n".join(lines))
+
+    result = subprocess.run(
+        ["docker", "compose",
+         "-f", str(path),
+         "--env-file", str(env_file) if env_file.exists() else ".env.example",
+         "config", "--quiet"],
+        capture_output=True, text=True, cwd=str(root)
+    )
+
+    if result.returncode != 0:
+        pytest.fail(
+            f"docker compose config --quiet failed for {compose_file}:\n"
+            f"{result.stderr.strip()}"
+        )

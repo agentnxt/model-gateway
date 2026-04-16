@@ -31,10 +31,14 @@ jobs:
       - name: Run unit tests
         run: pytest tests/ -v --tb=short
 
-      - name: Validate docker-compose.yml syntax
+      - name: Validate compose files
         run: |
-          docker compose config --quiet
-          echo "docker-compose.yml syntax OK"
+          python3 scripts/gen_ci_env.py
+          docker compose -f docker-compose.yml --env-file .env.ci config --quiet
+          echo "docker-compose.yml OK"
+          docker compose -f docker-compose.business.yml --env-file .env.ci config --quiet
+          echo "docker-compose.business.yml OK"
+          rm -f .env.ci
 
       - name: Lint Dockerfiles with hadolint
         uses: hadolint/hadolint-action@v3.1.0

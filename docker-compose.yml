@@ -14,7 +14,7 @@ volumes:
   langflow-db-data:
   ollama-data:
   loki-data:
-  tempo-data:
+  jaeger-data:
   otel-data:
   dockge-data:
   surrealdb-data:
@@ -356,16 +356,19 @@ services:
     labels:
       - "traefik.enable=false"
 
-  tempo:
-    image: grafana/tempo:2.7.2
-    container_name: autonomyx-tempo
+  jaeger:
+    image: jaegertracing/jaeger:2.4.0
+    container_name: autonomyx-jaeger
     restart: always
     networks:
       - coolify
-    command: ["-config.file=/etc/tempo/config.yaml"]
+    command: ["--config", "/etc/jaeger/config.yaml"]
+    environment:
+      - OTEL_ENABLED=true
     volumes:
-      - ./tempo/config.yaml:/etc/tempo/config.yaml:ro
-      - tempo-data:/var/tempo
+      - ./jaeger/config.yaml:/etc/jaeger/config.yaml:ro
+      - ./jaeger/jaeger-ui.json:/etc/jaeger/jaeger-ui.json:ro
+      - jaeger-data:/badger
     labels:
       - "traefik.enable=false"
 

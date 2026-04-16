@@ -15,7 +15,7 @@ datasources:
     jsonData:
       exemplarTraceIdDestinations:
         - name: trace_id
-          datasourceUid: tempo
+          datasourceUid: jaeger
 
   - name: Loki
     type: loki
@@ -29,26 +29,23 @@ datasources:
           matcherRegex: '"trace_id":"(\w+)"'
           matcherType: label
           url: '$${__value.raw}'
-          datasourceUid: tempo
+          datasourceUid: jaeger
 
-  - name: Tempo
-    type: tempo
-    uid: tempo
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
     access: proxy
-    url: http://tempo:3200
+    url: http://jaeger:16686
     isDefault: true
     editable: false
     jsonData:
       tracesToLogs:
         datasourceUid: loki
+        mapTagNamesEnabled: true
         mappedTags:
           - key: service.name
             value: service_name
         filterByTraceID: true
-      serviceMap:
-        datasourceUid: prometheus
-      search:
-        hide: false
       nodeGraph:
         enabled: true
 

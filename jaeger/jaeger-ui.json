@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "dagMaxNumServices": 200,
+    "menuEnabled": true
+  },
+  "archiveEnabled": true,
+  "tracking": {
+    "gaID": null,
+    "trackErrors": false
+  }
+}

@@ -111,7 +111,7 @@ services:
     - "traefik.http.services.litellm.loadbalancer.server.port=4000"
 
   ollama:
-    image: ollama/ollama:0.3.14
+    image: ollama/ollama:0.9
     container_name: autonomyx-ollama
     restart: always
     networks:

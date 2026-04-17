@@ -276,9 +276,9 @@ general_settings:
   # Authorization — OpenFGA (WHO) + OPA (CONDITIONS)
   # OpenFGA runs first: checks agent→model relationship and tenant ownership
   # OPA runs second: checks budget, DPDP, local-first, expiry, TPM
-  custom_auth: openfga_authz.custom_auth
+  # custom_auth: openfga_authz.custom_auth  # disabled — signature mismatch, fix later
   callbacks:
-    - opa_middleware.OPACallback
+    # - opa_middleware.OPACallback  # disabled — needs custom_auth working first
 
   # Custom routers mounted on the same FastAPI process
   additional_routers:

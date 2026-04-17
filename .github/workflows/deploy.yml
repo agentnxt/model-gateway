@@ -437,7 +437,7 @@ jobs:
 
             echo "=== Syncing nginx configs ==="
             sudo cp /home/ubuntu/autonomyx-model-gateway/nginx/*.conf /etc/nginx/sites-available/ 2>/dev/null || true
-            for conf in /etc/nginx/sites-available/llm.conf /etc/nginx/sites-available/flows.conf /etc/nginx/sites-available/metrics.conf /etc/nginx/sites-available/errors.conf /etc/nginx/sites-available/trust.conf /etc/nginx/sites-available/dockge.conf /etc/nginx/sites-available/db.conf; do
+            for conf in /etc/nginx/sites-available/llm.conf /etc/nginx/sites-available/flows.conf /etc/nginx/sites-available/metrics.conf /etc/nginx/sites-available/errors.conf /etc/nginx/sites-available/trust.conf /etc/nginx/sites-available/dockge.conf /etc/nginx/sites-available/db.conf /etc/nginx/sites-available/traces.conf; do
               if [ -f "$conf" ]; then
                 name=$(basename "$conf")
                 sudo ln -sf "$conf" /etc/nginx/sites-enabled/"$name" 2>/dev/null || true
@@ -446,7 +446,7 @@ jobs:
             sudo nginx -t && sudo systemctl reload nginx || echo "nginx reload failed"
 
             echo "=== TLS certificates ==="
-            for domain in llm flows metrics errors trust dockge db; do
+            for domain in llm flows metrics errors trust dockge db traces; do
               if ! sudo test -d /etc/letsencrypt/live/${domain}.openautonomyx.com; then
                 sudo certbot --nginx -d ${domain}.openautonomyx.com --non-interactive --agree-tos -m chinmay@openautonomyx.com 2>/dev/null || echo "certbot failed for ${domain}"
               fi

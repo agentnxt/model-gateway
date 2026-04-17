@@ -374,6 +374,8 @@ services:
     restart: always
     networks:
     - coolify
+    ports:
+    - "127.0.0.1:16686:16686"
     command: ["--config", "/etc/jaeger/config.yaml"]
     environment:
     - OTEL_ENABLED=true

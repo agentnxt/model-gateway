@@ -343,7 +343,6 @@ services:
     command:
     - -storageDataPath=/victoria-logs-data
     - -retentionPeriod=30d
-    - -logInternalErrors=false
     volumes:
     - victorialogs-data:/victoria-logs-data
     labels:

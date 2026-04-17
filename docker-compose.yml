@@ -21,6 +21,9 @@ volumes:
   caddy-data:
   caddy-config:
   pgadmin-data:
+  lago-db-data:
+  lago-storage:
+  lago-redis-data:
 
 services:
 
@@ -41,6 +44,9 @@ services:
     - LANGFLOW_DB_PASSWORD=${LANGFLOW_DB_PASSWORD}
     - OPENFGA_DB_PASSWORD=${OPENFGA_DB_PASSWORD}
     - GLITCHTIP_DB_PASSWORD=${GLITCHTIP_DB_PASSWORD}
+    - INFISICAL_DB_PASSWORD=${INFISICAL_DB_PASSWORD}
+    - LAGO_DB_PASSWORD=${LAGO_DB_PASSWORD}
+    - LANGFUSE_DB_PASSWORD=${LANGFUSE_DB_PASSWORD}
     volumes:
     - postgres-data:/var/lib/postgresql/data
     - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
@@ -89,6 +95,12 @@ services:
     - LAGO_API_KEY=${LAGO_API_KEY}
     - CLASSIFIER_URL=http://classifier:8100
     - RECOMMENDER_MODE=local
+    - OPENFGA_URL=http://openfga:8080
+    - OPENFGA_PRESHARED_KEY=${OPENFGA_PRESHARED_KEY}
+    - OPENFGA_STORE_ID=${OPENFGA_STORE_ID:-}
+    - OPENFGA_AUTH_MODEL_ID=${OPENFGA_AUTH_MODEL_ID:-}
+    - OPA_URL=http://opa:8181
+    - OPA_POLICY_PATH=/v1/data/autonomyx/gateway
     volumes:
     - ./config.yaml:/app/config.yaml:ro
     - ./lago_callback.py:/app/lago_callback.py:ro
@@ -418,8 +430,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: run --datastore-engine=postgres 
-      --datastore-uri=postgres://openfga:${OPENFGA_DB_PASSWORD}@openfga-db:5432/openfga?sslmode=disable
+    command: run
     environment:
     - OPENFGA_DATASTORE_ENGINE=postgres
     - OPENFGA_DATASTORE_URI=postgres://openfga:${OPENFGA_DB_PASSWORD}@postgres:5432/openfga?sslmode=disable
@@ -572,6 +583,173 @@ services:
     volumes:
     - pgadmin-data:/var/lib/pgadmin
     - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+    - traefik.enable=false
+
+  # ── Gotenberg (HTML→PDF for Lago invoices/credit notes) ──────────────────────
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: autonomyx-gotenberg
+    restart: always
+    networks:
+    - coolify
+    command:
+    - gotenberg
+    - --chromium-disable-javascript=true
+    - --chromium-deny-list=^(?!https?://((lago-api|lago-front):\d+)?/).*
+    labels:
+    - traefik.enable=false
+
+  # ── Lago (usage-based billing) ───────────────────────────────────────────────
+  # 6 services: dedicated DB + redis + api + api-worker + api-clock + front.
+  # Lago needs pg_partman, not available in the shared postgres:15-alpine.
+  # nginx (host) fronts billing.openautonomyx.com → api (3100) and front (3101).
+  lago-db:
+    build: ./postgres-lago
+    container_name: autonomyx-lago-db
+    restart: always
+    networks:
+    - coolify
+    environment:
+    - POSTGRES_USER=autonomyx
+    - POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+    - POSTGRES_DB=postgres
+    - LAGO_DB_PASSWORD=${LAGO_DB_PASSWORD}
+    volumes:
+    - lago-db-data:/var/lib/postgresql/data
+    - ./postgres-lago/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U autonomyx
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+    - traefik.enable=false
+
+  lago-redis:
+    image: valkey/valkey:8.1-alpine
+    container_name: autonomyx-lago-redis
+    restart: always
+    networks:
+    - coolify
+    command: ["valkey-server", "--appendonly", "yes"]
+    volumes:
+    - lago-redis-data:/data
+    labels:
+    - traefik.enable=false
+
+  lago-api:
+    image: getlago/api:v1.45.1
+    container_name: autonomyx-lago-api
+    restart: always
+    ports:
+    - "127.0.0.1:3100:3000"
+    networks:
+    - coolify
+    command: ["./scripts/start.api.sh"]
+    environment: &lago-env
+    - RAILS_ENV=production
+    - RAILS_LOG_TO_STDOUT=true
+    - LAGO_API_URL=${LAGO_API_URL}
+    - LAGO_FRONT_URL=${LAGO_FRONT_URL}
+    - LAGO_DOMAIN=billing.openautonomyx.com
+    - LAGO_DISABLE_SEGMENT=true
+    - LAGO_USE_AWS_S3=false
+    - LAGO_FROM_EMAIL=noreply@openautonomyx.com
+    - LAGO_CREATE_ORG=true
+    - DATABASE_URL=postgres://lago:${LAGO_DB_PASSWORD}@lago-db:5432/lago
+    - REDIS_URL=redis://lago-redis:6379
+    - SECRET_KEY_BASE=${LAGO_SECRET_KEY_BASE}
+    - LAGO_ENCRYPTION_PRIMARY_KEY=${LAGO_ENCRYPTION_PRIMARY_KEY}
+    - LAGO_ENCRYPTION_DETERMINISTIC_KEY=${LAGO_ENCRYPTION_DETERMINISTIC_KEY}
+    - LAGO_ENCRYPTION_KEY_DERIVATION_SALT=${LAGO_ENCRYPTION_KEY_DERIVATION_SALT}
+    - LAGO_RSA_PRIVATE_KEY=${LAGO_RSA_PRIVATE_KEY}
+    - LAGO_PDF_URL=http://gotenberg:3000
+    volumes:
+    - lago-storage:/app/storage
+    depends_on:
+      lago-db:
+        condition: service_healthy
+      lago-redis:
+        condition: service_started
+    labels:
+    - traefik.enable=false
+
+  lago-api-worker:
+    image: getlago/api:v1.45.1
+    container_name: autonomyx-lago-api-worker
+    restart: always
+    networks:
+    - coolify
+    command: ["./scripts/start.worker.sh"]
+    environment: *lago-env
+    volumes:
+    - lago-storage:/app/storage
+    depends_on:
+      lago-api:
+        condition: service_started
+    labels:
+    - traefik.enable=false
+
+  lago-api-clock:
+    image: getlago/api:v1.45.1
+    container_name: autonomyx-lago-api-clock
+    restart: always
+    networks:
+    - coolify
+    command: ["./scripts/start.clock.sh"]
+    environment: *lago-env
+    depends_on:
+      lago-api:
+        condition: service_started
+    labels:
+    - traefik.enable=false
+
+  lago-front:
+    image: getlago/front:v1.45.1
+    container_name: autonomyx-lago-front
+    restart: always
+    ports:
+    - "127.0.0.1:3101:80"
+    networks:
+    - coolify
+    environment:
+    - API_URL=${LAGO_API_URL}
+    - APP_ENV=production
+    - LAGO_DOMAIN=billing.openautonomyx.com
+    - LAGO_DISABLE_SIGNUP=false
+    - LAGO_OAUTH_PROXY_URL=
+    depends_on:
+      lago-api:
+        condition: service_started
+    labels:
+    - traefik.enable=false
+
+  # ── Langfuse v2 (LLM tracing / evaluation) ────────────────────────────────────
+  # Single container — shares postgres. v3 needs Clickhouse/MinIO/Redis
+  # (see langfuse/langfuse-docker for the split stack); v2 is plenty for
+  # request-level traces from LiteLLM.
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: autonomyx-langfuse
+    restart: always
+    ports:
+    - "127.0.0.1:3001:3000"
+    networks:
+    - coolify
+    environment:
+    - DATABASE_URL=postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@postgres:5432/langfuse
+    - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET}
+    - SALT=${LANGFUSE_SALT}
+    - NEXTAUTH_URL=${LANGFUSE_HOST}
+    - LANGFUSE_CSP_ENFORCE_HTTPS=true
+    - TELEMETRY_ENABLED=false
+    - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=false
     depends_on:
       postgres:
         condition: service_healthy

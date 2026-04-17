@@ -281,11 +281,11 @@ general_settings:
     # - opa_middleware.OPACallback  # disabled — needs custom_auth working first
 
   # Custom routers mounted on the same FastAPI process
-  additional_routers:
-    - recommender.router    # POST /recommend
-    - feedback.router       # POST /feedback
+  # additional_routers:  # disabled — modules crash on startup connecting to services
+    # - recommender.router    # POST /recommend
+    # - feedback.router       # POST /feedback
     # translate.router removed — no translate.py module; use translator sidecar directly at :8000
-    - openfga_authz.router  # POST /authz/grant|revoke|check, GET /authz/agent/*/models
-    - opa_middleware.router  # POST /policy/evaluate, GET /policy/health
-    - agent_identity.router  # POST /agents/create, GET /agents, PATCH /agents/*/suspend, etc.
-    - agent_discovery.router # GET /.well-known/agent-configuration
+    # - openfga_authz.router  # POST /authz/grant|revoke|check, GET /authz/agent/*/models
+    # - opa_middleware.router  # POST /policy/evaluate, GET /policy/health
+    # - agent_identity.router  # POST /agents/create, GET /agents, PATCH /agents/*/suspend, etc.
+    # - agent_discovery.router # GET /.well-known/agent-configuration

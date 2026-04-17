@@ -145,6 +145,8 @@ services:
     - "--storage.tsdb.retention.time=30d"
 
   grafana:
+    ports:
+    - "127.0.0.1:3000:3000"
     image: grafana/grafana:11.1.0
     container_name: autonomyx-grafana
     restart: always
@@ -173,6 +175,8 @@ services:
     - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
   langflow:
+    ports:
+    - "127.0.0.1:7860:7860"
     image: langflowai/langflow:1.0.19
     container_name: autonomyx-langflow
     restart: always
@@ -303,6 +307,8 @@ services:
 
   # ── Dockge (Docker Compose stack manager UI) ─────────────────────────────
   dockge:
+    ports:
+    - "127.0.0.1:5001:5001"
     image: louislam/dockge:1
     container_name: autonomyx-dockge
     restart: always
@@ -368,6 +374,8 @@ services:
 
   # ── Trust Centre (trust.openautonomyx.com) ───────────────────────────────
   trust:
+    ports:
+    - "127.0.0.1:8888:80"
     image: caddy:2.8-alpine
     container_name: autonomyx-trust
     restart: always
@@ -454,6 +462,8 @@ services:
     labels:
     - traefik.enable=false
   glitchtip:
+    ports:
+    - "127.0.0.1:8080:8000"
     image: glitchtip/glitchtip:6.1.5
     container_name: autonomyx-glitchtip
     restart: always
@@ -547,6 +557,8 @@ services:
     labels:
     - traefik.enable=false
   pgadmin:
+    ports:
+    - "127.0.0.1:5050:80"
     image: dpage/pgadmin4:8.6
     container_name: autonomyx-pgadmin
     restart: always

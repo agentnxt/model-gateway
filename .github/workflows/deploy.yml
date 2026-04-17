@@ -266,17 +266,17 @@ jobs:
               fi
             done
 
-            # Always run apt update + upgrade on deploy (security patches)
+            # Always run apt update + upgrade on deploy (security patches).
+            # DPkg::Lock::Timeout makes apt wait for the lock itself — covers all
+            # four lock files and avoids the check/grab race in the old fuser
+            # loop. 600s outlasts a normal unattended-upgrades run. (apt 2.1+)
             export DEBIAN_FRONTEND=noninteractive
-            # Wait for apt lock (unattended-upgrades may be running)
-            for i in $(seq 1 12); do
-              sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break
-              echo "Waiting for apt lock ($i/12)..."
-              sleep 10
-            done
-            sudo apt-get update -qq
-            sudo apt-get upgrade -y -qq               -o Dpkg::Options::="--force-confdef"               -o Dpkg::Options::="--force-confold"
-            sudo apt-get autoremove -y -qq
+            APT="sudo apt-get -o DPkg::Lock::Timeout=600"
+            $APT update -qq
+            $APT upgrade -y -qq \
+              -o Dpkg::Options::="--force-confdef" \
+              -o Dpkg::Options::="--force-confold"
+            $APT autoremove -y -qq
             echo "System packages up to date"
 
             # Verify Docker

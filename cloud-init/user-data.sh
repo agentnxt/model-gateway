@@ -22,24 +22,22 @@ echo "════════════════════════�
 echo "Autonomyx cloud-init bootstrap — $(date)"
 echo "═══════════════════════════════════════════════════════════"
 
-# ── Wait for apt lock (cloud-init sometimes races) ────────────────────────────
-for i in $(seq 1 30); do
-  if ! fuser /var/lib/dpkg/lock-frontend &>/dev/null; then break; fi
-  echo "Waiting for apt lock... ($i/30)"
-  sleep 5
-done
+# ── Apt wrapper: let apt wait for the lock itself ────────────────────────────
+# DPkg::Lock::Timeout covers all 4 apt locks and avoids the fuser-check race.
+# cloud-init runs as root (no sudo) but the shell alias still works.
+APT="apt-get -o DPkg::Lock::Timeout=600"
 
 # ── System update + upgrade ───────────────────────────────────────────────────
 echo "→ Updating system packages..."
-apt-get update -qq
-apt-get upgrade -y -qq \
+$APT update -qq
+$APT upgrade -y -qq \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
-apt-get autoremove -y -qq
+$APT autoremove -y -qq
 
 # ── Core packages ─────────────────────────────────────────────────────────────
 echo "→ Installing core packages..."
-apt-get install -y -qq \
+$APT install -y -qq \
   curl wget git ca-certificates gnupg \
   python3 python3-pip \
   openssl jq unzip \
@@ -58,8 +56,8 @@ https://download.docker.com/linux/ubuntu \
 $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
   > /etc/apt/sources.list.d/docker.list
 
-apt-get update -qq
-apt-get install -y -qq \
+$APT update -qq
+$APT install -y -qq \
   docker-ce docker-ce-cli containerd.io \
   docker-buildx-plugin docker-compose-plugin
 

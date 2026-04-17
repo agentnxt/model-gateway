@@ -390,7 +390,7 @@ services:
     - --server
     - --addr=0.0.0.0:8181
     - --log-format=json
-    - --log-level=warn
+    - --log-level=error
     - /policies
     volumes:
     - ./opa:/policies:ro

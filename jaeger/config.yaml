@@ -1,10 +1,3 @@
-# jaeger/config.yaml
-# Jaeger v2 — CNCF Graduated, Apache 2.0
-# All-in-one: collector + storage + UI in single binary/container
-# Built on OpenTelemetry Collector — accepts OTLP natively
-# Storage: badger (embedded key-value, no external DB needed)
-# UI: http://jaeger:16686
-
 service:
   extensions: [jaeger_storage, jaeger_query]
   pipelines:
@@ -18,15 +11,14 @@ extensions:
     backends:
       main_store:
         badger:
-          directory_key:   /badger/key
-          directory_value: /badger/data
-          ephemeral:       false    # persist to disk
+          directories:
+            keys:   /badger/key
+            values: /badger/data
+          ephemeral: false
 
   jaeger_query:
     storage:
       traces: main_store
-    ui:
-      config_file: /etc/jaeger/jaeger-ui.json
 
 receivers:
   otlp:

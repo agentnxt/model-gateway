@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local Agent Control</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #1e293b, #0f172a 45%);
+      color: var(--text);
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: min(920px, 95vw);
+      background: rgba(17, 24, 39, 0.88);
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 18px 38px rgba(0, 0, 0, 0.4);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .start { background: var(--green); }
+    .stop { background: var(--red); }
+    .refresh { background: var(--blue); }
+    .status {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid #475569;
+      color: var(--muted);
+    }
+    pre {
+      margin: 0;
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 360px;
+      max-height: 65vh;
+      overflow: auto;
+      white-space: pre-wrap;
+      color: #cbd5e1;
+      line-height: 1.4;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Local Agent Control</h1>
+    <div class="hint">Start and stop your Docker model + aider stack from this page.</div>
+
+    <div class="row">
+      <button class="start" id="startBtn">Start Stack</button>
+      <button class="stop" id="stopBtn">Stop Stack</button>
+      <button class="refresh" id="refreshBtn">Refresh</button>
+      <span class="status" id="statusBadge">Loading...</span>
+    </div>
+    <div class="row">
+      <input id="apiBase" style="padding:8px 10px;border-radius:8px;border:1px solid #475569;background:#0b1220;color:#cbd5e1;min-width:320px;" />
+      <button class="refresh" id="saveApiBtn">Save API URL</button>
+    </div>
+
+    <pre id="logBox">Loading logs...</pre>
+  </main>
+
+  <script>
+    const statusBadge = document.getElementById("statusBadge");
+    const logBox = document.getElementById("logBox");
+    const apiBaseInput = document.getElementById("apiBase");
+    const DEFAULT_API_BASE = "http://127.0.0.1:8765";
+    const savedBase = localStorage.getItem("agent_api_base") || DEFAULT_API_BASE;
+    apiBaseInput.value = savedBase;
+
+    async function call(path, method = "GET") {
+      const base = (localStorage.getItem("agent_api_base") || DEFAULT_API_BASE).replace(/\/+$/, "");
+      const res = await fetch(`${base}${path}`, { method });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    async function refresh() {
+      try {
+        const s = await call("/api/status");
+        statusBadge.textContent = s.running
+          ? `Running (${s.last_action})`
+          : `Idle (${s.last_action}, exit: ${s.last_exit_code})`;
+        logBox.textContent = s.logs || "No logs yet.";
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (e) {
+        statusBadge.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      try {
+        await call("/api/start", "POST");
+      } catch (e) {
+        alert(`Start failed: ${e.message}`);
+      }
+      refresh();
+    });
+
+    document.getElementById("stopBtn").addEventListener("click", async () => {
+      try {
+        await call("/api/stop", "POST");
+      } catch (e) {
+        alert(`Stop failed: ${e.message}`);
+      }
+      refresh();
+    });
+
+    document.getElementById("refreshBtn").addEventListener("click", refresh);
+    document.getElementById("saveApiBtn").addEventListener("click", () => {
+      localStorage.setItem("agent_api_base", apiBaseInput.value.trim() || DEFAULT_API_BASE);
+      refresh();
+    });
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>

@@ -403,7 +403,7 @@ services:
     - caddy-config:/config
     labels:
     - "traefik.enable=true"
-    - "traefik.http.routers.trust.rule=Host(`trust.openautonomyx.com`) || Host(`www.openautonomyx.com`)"
+    - "traefik.http.routers.trust.rule=Host(`trust.openautonomyx.com`) || Host(`www.openautonomyx.com`) || Host(`openautonomyx.com`)"
     - "traefik.http.routers.trust.entrypoints=https"
     - "traefik.http.routers.trust.tls.certresolver=letsencrypt"
     - "traefik.http.services.trust.loadbalancer.server.port=80"

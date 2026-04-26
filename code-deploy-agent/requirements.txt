@@ -1,0 +1,7 @@
+langchain
+langchain-anthropic
+langgraph
+langchain-community
+ollama
+python-dotenv
+pydantic

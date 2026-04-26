@@ -1,0 +1,28 @@
+# LiteLLM Model Router Configuration
+# See https://docs.litellm.ai/docs/routing for more details
+
+model_list:
+  - model_name: ollama/qwen3.5
+    litellm_params:
+      model: ollama/qwen3.5
+      api_base: http://localhost:11434
+  - model_name: ollama/gemma4
+    litellm_params:
+      model: ollama/gemma4
+      api_base: http://localhost:11434
+  - model_name: fast-model # Alias for the primary model
+    litellm_params:
+      model: ollama/qwen3.5
+      api_base: http://localhost:11434
+  - model_name: large-model # Alias for a more powerful model
+    litellm_params:
+      model: ollama/gemma4:26b
+      api_base: http://localhost:11434
+
+# Router strategy
+routing_strategy: simple-shuffle # Pick a random model from the list
+
+# Cooldowns and timeouts
+set_verbose: True
+retry_after: 10 # 10 seconds
+timeout: 300 # 5 minutes

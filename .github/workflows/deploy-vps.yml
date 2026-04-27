@@ -1,0 +1,41 @@
+name: Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: ["CI + Build + Deploy"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production VPS
+    runs-on: ubuntu-latest
+    # Only run if the build workflow was successful or if manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          script: |
+            echo "Starting deployment on VPS..."
+            
+            # Navigate to your project directory on the server
+            # Note: Update this path if your docker-compose.yml is located elsewhere
+            cd /opt/autonomyx || cd ~/autonomyx || exit 1
+            
+            echo "Pulling latest Docker images..."
+            docker-compose pull
+            
+            echo "Restarting services..."
+            docker-compose up -d --remove-orphans
+            
+            echo "Cleaning up dangling images to free up space..."
+            docker image prune -f
+            
+            echo "Deployment successful!"

@@ -1,0 +1,14 @@
+version: 1
+namespace: openagx.cognitive_drift.v1
+broker: redpanda
+topics:
+  - name: cognitive-drift-events
+    schema_ref: schemas/guardrails/redpanda/cognitive-drift-event/v1.json
+    schema_registry_subject: cognitive-drift-events-value
+    compatibility: backward
+    partitions: 12
+    replication_factor: 3
+    retention_ms: 2592000000
+    cleanup_policy: delete
+    compression_type: lz4
+    partition_key: agent_entity_id

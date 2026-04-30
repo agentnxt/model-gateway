@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agnxxt.com/schemas/guardrails/kernel-hooks.schema.json",
+  "title": "KernelHookEvent",
+  "type": "object",
+  "required": [
+    "hook_id",
+    "trace_id",
+    "tenant_id",
+    "agent_id",
+    "task_id",
+    "step_id",
+    "phase",
+    "status",
+    "timestamp"
+  ],
+  "properties": {
+    "hook_id": { "type": "string", "minLength": 8 },
+    "trace_id": { "type": "string", "minLength": 8 },
+    "tenant_id": { "type": "string", "minLength": 2 },
+    "agent_id": { "type": "string", "minLength": 2 },
+    "task_id": { "type": "string", "minLength": 2 },
+    "step_id": { "type": "string", "minLength": 2 },
+    "phase": {
+      "type": "string",
+      "enum": ["pre_tool", "post_tool", "post_completion"]
+    },
+    "tool_name": { "type": "string" },
+    "input_hash": { "type": "string" },
+    "output_hash": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "blocked", "error", "timeout"]
+    },
+    "latency_ms": { "type": "integer", "minimum": 0 },
+    "error_code": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "phase": { "const": "pre_tool" } } },
+      "then": {
+        "required": ["tool_name", "input_hash"]
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "post_tool" } } },
+      "then": {
+        "required": ["tool_name", "input_hash"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

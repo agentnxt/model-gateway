@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package agnxxt.guardrails.hooks.v1;
+
+option go_package = "github.com/agnxxt/autonomyx-model-gateway/gen/guardrails/hooks/v1;hooksv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+enum HookPhase {
+  HOOK_PHASE_UNSPECIFIED = 0;
+  PRE_TOOL = 1;
+  POST_TOOL = 2;
+  POST_COMPLETION = 3;
+}
+
+enum HookStatus {
+  HOOK_STATUS_UNSPECIFIED = 0;
+  OK = 1;
+  BLOCKED = 2;
+  ERROR = 3;
+  TIMEOUT = 4;
+}
+
+message KernelHookEvent {
+  string hook_id = 1;
+  string trace_id = 2;
+  string tenant_id = 3;
+  string agent_id = 4;
+  string task_id = 5;
+  string step_id = 6;
+  HookPhase phase = 7;
+  string tool_name = 8;
+  string input_hash = 9;
+  string output_hash = 10;
+  HookStatus status = 11;
+  int32 latency_ms = 12;
+  string error_code = 13;
+  google.protobuf.Timestamp timestamp = 14;
+  google.protobuf.Struct metadata = 15;
+}
+
+message BehavioralGateCheckRequest {
+  KernelHookEvent event = 1;
+}
+
+message BehavioralGateCheckResponse {
+  string verdict = 1; // ALLOW|WARN|STRONG_WARN|BLOCK
+  string reason = 2;
+}
+
+message CotSubmitRequest {
+  KernelHookEvent event = 1;
+}
+
+message CotSubmitResponse {
+  bool accepted = 1;
+}
+
+service KernelHookRuntime {
+  // Blocking, synchronous pre-tool guard check.
+  rpc PreToolCheck(BehavioralGateCheckRequest) returns (BehavioralGateCheckResponse);
+
+  // Guaranteed-delivery post-tool signal.
+  rpc PostToolEmit(KernelHookEvent) returns (CotSubmitResponse);
+
+  // Guaranteed-delivery post-completion signal.
+  rpc PostCompletionEmit(CotSubmitRequest) returns (CotSubmitResponse);
+}

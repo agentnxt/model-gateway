@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/OpenAGX/caas/schemas/cognitive-drift-event/v1.json",
+  "title": "CognitiveDriftEvent",
+  "description": "Schema for the cognitive-drift-events Redpanda topic. All CGL services publish to this topic. fraud-pipeline and behavioral-gate consume from it.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "schema_version",
+    "occurred_at",
+    "agent_entity_id",
+    "task_id",
+    "event_type",
+    "source_service",
+    "drift_score",
+    "verdict"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event ID (UUID v4)"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp"
+    },
+    "agent_entity_id": {
+      "type": "string",
+      "description": "Entity ID from entity-service (type AI_AGENT or AUTONOMOUS_SYSTEM)"
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Task ID from intent-registry"
+    },
+    "turn_number": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "DRIFT_SCORE_UPDATED",
+        "GOAL_DEVIATION_DETECTED",
+        "COT_ANOMALY_DETECTED",
+        "CONSTRAINT_ERODED",
+        "SCOPE_EXPANSION_DETECTED",
+        "MEMORY_BLEED_DETECTED",
+        "SYCOPHANCY_DETECTED",
+        "BOUNDARY_ENFORCED",
+        "CONSTRAINT_INJECTED",
+        "AGENT_SUSPENDED",
+        "REVIEW_ESCALATED"
+      ]
+    },
+    "source_service": {
+      "type": "string",
+      "enum": [
+        "behavioral-gate",
+        "intent-registry",
+        "cot-auditor",
+        "constraint-injector",
+        "drift-scorer",
+        "memory-isolator",
+        "sycophancy-guard"
+      ]
+    },
+    "drift_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "description": "Current drift score at time of event"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["ALLOW", "WARN", "STRONG_WARN", "BLOCK"],
+      "description": "Verdict from behavioral-gate at time of event"
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "weight"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "GOAL_DEVIATION",
+              "COT_ANOMALY",
+              "CONSTRAINT_ERODED",
+              "SCOPE_EXPANSION",
+              "VELOCITY_SPIKE",
+              "MEMORY_BLEED",
+              "SYCOPHANCY"
+            ]
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "proposed_action": {
+      "type": "object",
+      "description": "The action being evaluated (present on BLOCK/WARN events)",
+      "properties": {
+        "resource": { "type": "string" },
+        "relation": { "type": "string" },
+        "tool_name": { "type": "string" },
+        "parameters_json": { "type": "string" }
+      }
+    },
+    "remediation": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "INJECT_CONSTRAINTS",
+        "RESET_MEMORY",
+        "HUMAN_REVIEW",
+        "SUSPEND_AGENT"
+      ]
+    },
+    "review_token": {
+      "type": "string",
+      "description": "Present if escalated to decision-service for M-of-N approval"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary k/v from caller context",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "additionalProperties": false,
+
+  "x-topic-config": {
+    "topic_name": "cognitive-drift-events",
+    "partitions": 12,
+    "replication_factor": 3,
+    "retention_ms": 2592000000,
+    "cleanup_policy": "delete",
+    "compression_type": "lz4",
+    "partition_key": "agent_entity_id",
+    "consumer_groups": [
+      {
+        "name": "behavioral-gate-consumer",
+        "service": "behavioral-gate",
+        "port": 50059,
+        "filter": ["DRIFT_SCORE_UPDATED", "GOAL_DEVIATION_DETECTED", "SYCOPHANCY_DETECTED"]
+      },
+      {
+        "name": "fraud-pipeline-consumer",
+        "service": "fraud-pipeline",
+        "port": 50054,
+        "filter": ["*"]
+      },
+      {
+        "name": "decision-service-consumer",
+        "service": "decision-service",
+        "port": 50055,
+        "filter": ["REVIEW_ESCALATED", "AGENT_SUSPENDED"]
+      }
+    ]
+  }
+}

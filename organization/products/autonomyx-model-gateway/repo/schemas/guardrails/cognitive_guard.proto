@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package agnxxt.guardrails.v1;
+
+option go_package = "github.com/agnxxt/autonomyx-model-gateway/gen/guardrails/v1;guardrailsv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+message EventMeta {
+  string event_id = 1;
+  string tenant_id = 2;
+  string trace_id = 3;
+  string agent_id = 4;
+  string workflow_id = 5;
+  google.protobuf.Timestamp occurred_at = 6;
+  string source = 7;
+}
+
+message RiskScore {
+  string label = 1;
+  double score = 2;
+  string severity = 3; // low|medium|high|critical
+}
+
+message IntentSignal {
+  EventMeta meta = 1;
+  string user_input = 2;
+  repeated string inferred_intents = 3;
+  repeated string prohibited_intents = 4;
+  repeated RiskScore risks = 5;
+  google.protobuf.Struct attributes = 6;
+}
+
+message CotAuditSignal {
+  EventMeta meta = 1;
+  bool reasoning_policy_passed = 2;
+  repeated string violations = 3;
+  repeated RiskScore risks = 4;
+  google.protobuf.Struct attributes = 5;
+}
+
+message ConstraintInjectionSignal {
+  EventMeta meta = 1;
+  repeated string injected_constraints = 2;
+  repeated string rejected_actions = 3;
+  repeated RiskScore risks = 4;
+  google.protobuf.Struct attributes = 5;
+}
+
+message DriftScoreSignal {
+  EventMeta meta = 1;
+  double drift_score = 2;
+  string baseline_version = 3;
+  repeated string drift_dimensions = 4;
+  repeated RiskScore risks = 5;
+  google.protobuf.Struct attributes = 6;
+}
+
+message MemoryIsolationSignal {
+  EventMeta meta = 1;
+  bool isolation_passed = 2;
+  repeated string leaked_memory_scopes = 3;
+  repeated RiskScore risks = 4;
+  google.protobuf.Struct attributes = 5;
+}
+
+message SycophancyGuardSignal {
+  EventMeta meta = 1;
+  double sycophancy_score = 2;
+  bool intervention_applied = 3;
+  repeated string interventions = 4;
+  repeated RiskScore risks = 5;
+  google.protobuf.Struct attributes = 6;
+}
+
+message GuardDecision {
+  EventMeta meta = 1;
+  string action = 2; // allow|challenge|block|escalate
+  string reason = 3;
+  repeated string controls_applied = 4;
+  repeated RiskScore risks = 5;
+  google.protobuf.Struct attributes = 6;
+}
+
+service CognitiveGuard {
+  rpc EvaluateIntent(IntentSignal) returns (GuardDecision);
+  rpc AuditCot(CotAuditSignal) returns (GuardDecision);
+  rpc InjectConstraints(ConstraintInjectionSignal) returns (GuardDecision);
+  rpc ScoreDrift(DriftScoreSignal) returns (GuardDecision);
+  rpc EnforceMemoryIsolation(MemoryIsolationSignal) returns (GuardDecision);
+  rpc GuardSycophancy(SycophancyGuardSignal) returns (GuardDecision);
+}

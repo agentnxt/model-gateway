@@ -87,6 +87,7 @@ jobs:
     name: Build & Push Images
     runs-on: ubuntu-latest
     needs: test
+    if: github.event_name != 'workflow_dispatch'
 
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
@@ -194,7 +195,9 @@ jobs:
   deploy:
     name: Deploy to vps.openautonomyx.com
     runs-on: ubuntu-latest
-    needs: build
+    needs:
+      - test
+      - integration-test
     environment: production
 
     steps:
@@ -205,7 +208,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           timeout: 60s
-          envs: GROQ_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,VERTEX_PROJECT_ID,VERTEX_LOCATION,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,STRIPE_SECRET_KEY,GLITCHTIP_AUTH_TOKEN,LITELLM_MASTER_KEY,FRP_TOKEN,LOGTO_ISSUER,LOGTO_CLIENT_ID,LOGTO_CLIENT_SECRET,LOGTO_REDIRECT_URL,LOGTO_POST_LOGOUT_REDIRECT_URL,SSO_ENABLED,SSO_PROVIDER,SSO_ISSUER,SSO_CLIENT_ID,SSO_CLIENT_SECRET,SSO_REDIRECT_URL,SSO_POST_LOGOUT_REDIRECT_URL,SSO_SCOPES,SSO_CLAIM_EMAIL,SSO_CLAIM_NAME,SSO_CLAIM_GROUPS,SSO_ALLOWED_DOMAINS,SSO_SESSION_SECRET,SSO_PROXY_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,SMTP_FROM_ADDRESS,SMTP_FROM_NAME,SMTP_USE_TLS,SMTP_USE_SSL,SMTP_SKIP_VERIFY,SMTP_CONNECTION_URL,REPORTING_DEFAULT_FROM,REPORTING_REPLY_TO,REPORTING_EMAIL_ENABLED,REPORTING_EMAIL_TO,REPORTING_EMAIL_CC,REPORTING_EMAIL_BCC,REPORTING_SLACK_ENABLED,REPORTING_SLACK_WEBHOOK_URL,REPORTING_SLACK_CHANNEL,REPORTING_SLACK_USERNAME,REPORTING_WEBHOOK_ENABLED,REPORTING_WEBHOOK_URL,REPORTING_WEBHOOK_AUTH_HEADER,REPORTING_WEBHOOK_AUTH_TOKEN,REPORTING_GLITCHTIP_ENABLED,REPORTING_GLITCHTIP_URL,REPORTING_GLITCHTIP_AUTH_TOKEN,REPORTING_LANGFUSE_ENABLED,REPORTING_LANGFUSE_HOST,REPORTING_LANGFUSE_PUBLIC_KEY,REPORTING_LANGFUSE_SECRET_KEY,UPTIME_KUMA_ENABLED,UPTIME_KUMA_URL,UPTIME_KUMA_INTERNAL_URL,SIGNOZ_ENABLED,SIGNOZ_URL,SIGNOZ_REGION,SIGNOZ_INGESTION_KEY
+          envs: GROQ_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,VERTEX_PROJECT_ID,VERTEX_LOCATION,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,STRIPE_SECRET_KEY,GLITCHTIP_AUTH_TOKEN,LITELLM_MASTER_KEY,FRP_TOKEN,LOGTO_ISSUER,LOGTO_CLIENT_ID,LOGTO_CLIENT_SECRET,LOGTO_REDIRECT_URL,LOGTO_POST_LOGOUT_REDIRECT_URL,SSO_ENABLED,SSO_PROVIDER,SSO_ISSUER,SSO_CLIENT_ID,SSO_CLIENT_SECRET,SSO_REDIRECT_URL,SSO_POST_LOGOUT_REDIRECT_URL,SSO_SCOPES,SSO_CLAIM_EMAIL,SSO_CLAIM_NAME,SSO_CLAIM_GROUPS,SSO_ALLOWED_DOMAINS,SSO_SESSION_SECRET,SSO_PROXY_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,SMTP_FROM_ADDRESS,SMTP_FROM_NAME,SMTP_USE_TLS,SMTP_USE_SSL,SMTP_SKIP_VERIFY,SMTP_CONNECTION_URL,REPORTING_DEFAULT_FROM,REPORTING_REPLY_TO,REPORTING_EMAIL_ENABLED,REPORTING_EMAIL_TO,REPORTING_EMAIL_CC,REPORTING_EMAIL_BCC,REPORTING_SLACK_ENABLED,REPORTING_SLACK_WEBHOOK_URL,REPORTING_SLACK_CHANNEL,REPORTING_SLACK_USERNAME,REPORTING_WEBHOOK_ENABLED,REPORTING_WEBHOOK_URL,REPORTING_WEBHOOK_AUTH_HEADER,REPORTING_WEBHOOK_AUTH_TOKEN,REPORTING_GLITCHTIP_ENABLED,REPORTING_GLITCHTIP_URL,REPORTING_GLITCHTIP_AUTH_TOKEN,REPORTING_LANGFUSE_ENABLED,REPORTING_LANGFUSE_HOST,REPORTING_LANGFUSE_PUBLIC_KEY,REPORTING_LANGFUSE_SECRET_KEY,UPTIME_KUMA_ENABLED,UPTIME_KUMA_URL,UPTIME_KUMA_INTERNAL_URL
           script: |
             set -e
             # Ensure ubuntu is in docker group (bootstrap may have just added it)
@@ -214,7 +217,13 @@ jobs:
               sudo usermod -aG docker ubuntu
               exec sg docker "$0 $@"
             fi
+            if [ ! -d /home/ubuntu/autonomyx-model-gateway/.git ]; then
+              echo "Bootstrapping repo checkout..."
+              rm -rf /home/ubuntu/autonomyx-model-gateway
+              git clone https://github.com/AGenNext/model-gateway.git /home/ubuntu/autonomyx-model-gateway
+            fi
             cd /home/ubuntu/autonomyx-model-gateway
+            touch .env
 
             # Write each secret from GitHub Secrets into .env
             # Only writes if the value is non-empty — never blanks existing values
@@ -292,10 +301,6 @@ jobs:
             write_secret "UPTIME_KUMA_ENABLED"     "$UPTIME_KUMA_ENABLED"
             write_secret "UPTIME_KUMA_URL"         "$UPTIME_KUMA_URL"
             write_secret "UPTIME_KUMA_INTERNAL_URL" "$UPTIME_KUMA_INTERNAL_URL"
-            write_secret "SIGNOZ_ENABLED"          "$SIGNOZ_ENABLED"
-            write_secret "SIGNOZ_URL"              "$SIGNOZ_URL"
-            write_secret "SIGNOZ_REGION"           "$SIGNOZ_REGION"
-            write_secret "SIGNOZ_INGESTION_KEY"    "$SIGNOZ_INGESTION_KEY"
 
             echo "Secrets injected into .env"
 
@@ -351,6 +356,11 @@ jobs:
           script: |
             set -e
 
+            if [ ! -d /home/ubuntu/autonomyx-model-gateway/.git ]; then
+              echo "Bootstrapping repo checkout..."
+              rm -rf /home/ubuntu/autonomyx-model-gateway
+              git clone https://github.com/AGenNext/model-gateway.git /home/ubuntu/autonomyx-model-gateway
+            fi
             cd /home/ubuntu/autonomyx-model-gateway
 
             echo "=== Pulling latest code (BEFORE running any scripts) ==="
@@ -382,22 +392,9 @@ jobs:
             echo "=== Removing obsolete version attribute ==="
             sed -i '/^version:/d' docker-compose.yml
 
-            echo "=== Selecting OpenTelemetry collector config ==="
-            if grep -q '^SIGNOZ_ENABLED=true' .env; then
-              if ! grep -q '^SIGNOZ_REGION=' .env || [ -z "$(grep '^SIGNOZ_REGION=' .env | cut -d= -f2-)" ]; then
-                echo "ERROR: SIGNOZ_ENABLED=true but SIGNOZ_REGION is empty"
-                exit 1
-              fi
-              if ! grep -q '^SIGNOZ_INGESTION_KEY=' .env || [ -z "$(grep '^SIGNOZ_INGESTION_KEY=' .env | cut -d= -f2-)" ]; then
-                echo "ERROR: SIGNOZ_ENABLED=true but SIGNOZ_INGESTION_KEY is empty"
-                exit 1
-              fi
-              cp otel/collector.signoz-cloud.yaml otel/collector.generated.yaml
-              echo "Using SigNoz Cloud dual-export collector config"
-            else
-              cp otel/collector.yaml otel/collector.generated.yaml
-              echo "Using local-only collector config"
-            fi
+            echo "=== OpenTelemetry collector ==="
+            cp otel/collector.yaml otel/collector.generated.yaml
+            echo "SigNoz disabled for this deployment"
 
             echo "=== Pulling pre-built images from Docker Hub ==="
             docker compose pull playwright classifier translator || true

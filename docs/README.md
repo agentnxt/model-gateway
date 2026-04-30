@@ -17,4 +17,5 @@
 ## Operations
 
 - [Troubleshooting](./troubleshooting.md) — common failures and fixes
+- [GitHub Secrets](./github-secrets.md) — repository + production environment secrets, shared SSO/SMTP/reporting
 - [Service Decision Log](../references/service-decision-log.md) — why every service was chosen

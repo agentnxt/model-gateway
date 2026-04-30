@@ -18,6 +18,9 @@ GLITCHTIP_URL   = os.environ.get("GLITCHTIP_URL",        "http://glitchtip:8080"
 AUTH_TOKEN      = os.environ.get("GLITCHTIP_AUTH_TOKEN", "")
 ORG_SLUG        = os.environ.get("GLITCHTIP_ORG_SLUG",   "autonomyx")
 PROJECT_SLUG    = os.environ.get("GLITCHTIP_PROJECT_SLUG","gateway")
+UPTIME_KUMA_URL = os.environ.get("UPTIME_KUMA_URL", "https://uptime.openautonomyx.com")
+SIGNOZ_ENABLED  = os.environ.get("SIGNOZ_ENABLED", "false").lower() == "true"
+SIGNOZ_URL      = os.environ.get("SIGNOZ_URL", "")
 
 # Endpoints to monitor — name, url, expected status code
 MONITORS = [
@@ -70,7 +73,23 @@ MONITORS = [
         "interval_seconds":  300,
         "monitor_type":      "GET",
     },
+    {
+        "name":              "Uptime Kuma",
+        "url":               UPTIME_KUMA_URL,
+        "expected_status":   200,
+        "interval_seconds":  120,
+        "monitor_type":      "GET",
+    },
 ]
+
+if SIGNOZ_ENABLED and SIGNOZ_URL:
+    MONITORS.append({
+        "name":              "SigNoz",
+        "url":               SIGNOZ_URL,
+        "expected_status":   200,
+        "interval_seconds":  120,
+        "monitor_type":      "GET",
+    })
 
 
 def api(method: str, path: str, data: dict = None) -> dict:

@@ -1,0 +1,96 @@
+# otel/collector.generated.yaml
+# Default generated collector config for local and manual docker compose runs.
+# CI swaps this file with the SigNoz Cloud variant when SIGNOZ_ENABLED=true.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: litellm
+          static_configs:
+            - targets: [litellm:4000]
+          metrics_path: /metrics
+
+        - job_name: langflow
+          static_configs:
+            - targets: [langflow:7860]
+          metrics_path: /metrics
+
+        - job_name: otel-collector
+          static_configs:
+            - targets: [localhost:8888]
+
+  docker_stats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 30s
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: production
+        action: upsert
+      - key: service.namespace
+        value: autonomyx
+        action: upsert
+
+  filter/drop_debug:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.route"] == "/health"'
+        - 'attributes["http.route"] == "/metrics"'
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: autonomyx
+
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  otlphttp/victorialogs:
+    endpoint: http://victorialogs:9428/insert/opentelemetry
+    tls:
+      insecure: true
+
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+service:
+  pipelines:
+    metrics:
+      receivers:  [otlp, prometheus]
+      processors: [batch, resource]
+      exporters:  [prometheus]
+
+    traces:
+      receivers:  [otlp]
+      processors: [batch, resource, filter/drop_debug]
+      exporters:  [otlp/jaeger]
+
+    logs:
+      receivers:  [otlp]
+      processors: [batch, resource]
+      exporters:  [otlphttp/victorialogs]
+
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+    logs:
+      level: warn

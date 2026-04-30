@@ -7,6 +7,7 @@ One deployment gives you:
 - Intelligent routing — right model for every task, automatically
 - Metered billing per tenant — Lago invoices, Langfuse traces
 - Multi-tenant auth — Keycloak, one command to onboard a customer
+- Shared SSO + shared notifications — one config layer for auth, SMTP, email, Slack, webhook
 - Pre-built AI workflows — ready to call, not ready to configure
 - 22 Indian languages + Arabic + Southeast Asian — built in
 - Human feedback loop — improves models on your actual workload
@@ -131,6 +132,32 @@ Private Node: full infrastructure isolation. DPDP DPA signable.
 | Task classifier | sentence-transformers | Apache 2.0 |
 
 > ⚠️ NLLB-200 and SeamlessM4T are CC-BY-NC 4.0 — not commercially usable. Neither is in this stack.
+
+---
+
+## Shared Auth And Reporting
+
+The platform now has a shared operator config layer for:
+
+- SSO / OIDC: `LOGTO_*` and generic `SSO_*`
+- SMTP / transactional email: `SMTP_*`
+- Reporting sinks: `REPORTING_*` for email, Slack, webhook, GlitchTip, and Langfuse
+
+These values are designed to be managed as GitHub Actions `production` environment secrets and injected into the server `.env` during deploy. The goal is to avoid per-service secret drift.
+
+Currently wired in the stack:
+
+- Shared SMTP: Grafana, GlitchTip, Infisical, pgAdmin, Lago, Langfuse
+- Shared reporting contact points in Grafana: email, Slack webhook, generic webhook
+- Shared SSO contract in env/docs for direct OIDC or `oauth2-proxy` based rollout
+- Shared health layer: Uptime Kuma, GlitchTip uptime monitors, deploy health checks
+- Optional external observability sink: SigNoz Cloud via dual-export OpenTelemetry collector
+
+See:
+
+- `docs/github-secrets.md`
+- `docs/operator-setup.md`
+- `.env.example`
 
 ---
 

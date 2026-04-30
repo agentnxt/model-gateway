@@ -205,7 +205,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           timeout: 60s
-          envs: GROQ_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,VERTEX_PROJECT_ID,VERTEX_LOCATION,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,STRIPE_SECRET_KEY,GLITCHTIP_AUTH_TOKEN,LITELLM_MASTER_KEY,FRP_TOKEN,LOGTO_ISSUER,LOGTO_CLIENT_ID,LOGTO_CLIENT_SECRET,LOGTO_REDIRECT_URL,LOGTO_POST_LOGOUT_REDIRECT_URL,SSO_ENABLED,SSO_PROVIDER,SSO_ISSUER,SSO_CLIENT_ID,SSO_CLIENT_SECRET,SSO_REDIRECT_URL,SSO_POST_LOGOUT_REDIRECT_URL,SSO_SCOPES,SSO_CLAIM_EMAIL,SSO_CLAIM_NAME,SSO_CLAIM_GROUPS,SSO_ALLOWED_DOMAINS,SSO_SESSION_SECRET,SSO_PROXY_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,SMTP_FROM_ADDRESS,SMTP_FROM_NAME,SMTP_USE_TLS,SMTP_USE_SSL,SMTP_SKIP_VERIFY,SMTP_CONNECTION_URL,REPORTING_DEFAULT_FROM,REPORTING_REPLY_TO,REPORTING_EMAIL_ENABLED,REPORTING_EMAIL_TO,REPORTING_EMAIL_CC,REPORTING_EMAIL_BCC,REPORTING_SLACK_ENABLED,REPORTING_SLACK_WEBHOOK_URL,REPORTING_SLACK_CHANNEL,REPORTING_SLACK_USERNAME,REPORTING_WEBHOOK_ENABLED,REPORTING_WEBHOOK_URL,REPORTING_WEBHOOK_AUTH_HEADER,REPORTING_WEBHOOK_AUTH_TOKEN,REPORTING_GLITCHTIP_ENABLED,REPORTING_GLITCHTIP_URL,REPORTING_GLITCHTIP_AUTH_TOKEN,REPORTING_LANGFUSE_ENABLED,REPORTING_LANGFUSE_HOST,REPORTING_LANGFUSE_PUBLIC_KEY,REPORTING_LANGFUSE_SECRET_KEY
+          envs: GROQ_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,VERTEX_PROJECT_ID,VERTEX_LOCATION,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,STRIPE_SECRET_KEY,GLITCHTIP_AUTH_TOKEN,LITELLM_MASTER_KEY,FRP_TOKEN,LOGTO_ISSUER,LOGTO_CLIENT_ID,LOGTO_CLIENT_SECRET,LOGTO_REDIRECT_URL,LOGTO_POST_LOGOUT_REDIRECT_URL,SSO_ENABLED,SSO_PROVIDER,SSO_ISSUER,SSO_CLIENT_ID,SSO_CLIENT_SECRET,SSO_REDIRECT_URL,SSO_POST_LOGOUT_REDIRECT_URL,SSO_SCOPES,SSO_CLAIM_EMAIL,SSO_CLAIM_NAME,SSO_CLAIM_GROUPS,SSO_ALLOWED_DOMAINS,SSO_SESSION_SECRET,SSO_PROXY_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,SMTP_FROM_ADDRESS,SMTP_FROM_NAME,SMTP_USE_TLS,SMTP_USE_SSL,SMTP_SKIP_VERIFY,SMTP_CONNECTION_URL,REPORTING_DEFAULT_FROM,REPORTING_REPLY_TO,REPORTING_EMAIL_ENABLED,REPORTING_EMAIL_TO,REPORTING_EMAIL_CC,REPORTING_EMAIL_BCC,REPORTING_SLACK_ENABLED,REPORTING_SLACK_WEBHOOK_URL,REPORTING_SLACK_CHANNEL,REPORTING_SLACK_USERNAME,REPORTING_WEBHOOK_ENABLED,REPORTING_WEBHOOK_URL,REPORTING_WEBHOOK_AUTH_HEADER,REPORTING_WEBHOOK_AUTH_TOKEN,REPORTING_GLITCHTIP_ENABLED,REPORTING_GLITCHTIP_URL,REPORTING_GLITCHTIP_AUTH_TOKEN,REPORTING_LANGFUSE_ENABLED,REPORTING_LANGFUSE_HOST,REPORTING_LANGFUSE_PUBLIC_KEY,REPORTING_LANGFUSE_SECRET_KEY,UPTIME_KUMA_ENABLED,UPTIME_KUMA_URL,UPTIME_KUMA_INTERNAL_URL,SIGNOZ_ENABLED,SIGNOZ_URL,SIGNOZ_REGION,SIGNOZ_INGESTION_KEY
           script: |
             set -e
             # Ensure ubuntu is in docker group (bootstrap may have just added it)
@@ -289,6 +289,13 @@ jobs:
             write_secret "REPORTING_LANGFUSE_HOST" "$REPORTING_LANGFUSE_HOST"
             write_secret "REPORTING_LANGFUSE_PUBLIC_KEY" "$REPORTING_LANGFUSE_PUBLIC_KEY"
             write_secret "REPORTING_LANGFUSE_SECRET_KEY" "$REPORTING_LANGFUSE_SECRET_KEY"
+            write_secret "UPTIME_KUMA_ENABLED"     "$UPTIME_KUMA_ENABLED"
+            write_secret "UPTIME_KUMA_URL"         "$UPTIME_KUMA_URL"
+            write_secret "UPTIME_KUMA_INTERNAL_URL" "$UPTIME_KUMA_INTERNAL_URL"
+            write_secret "SIGNOZ_ENABLED"          "$SIGNOZ_ENABLED"
+            write_secret "SIGNOZ_URL"              "$SIGNOZ_URL"
+            write_secret "SIGNOZ_REGION"           "$SIGNOZ_REGION"
+            write_secret "SIGNOZ_INGESTION_KEY"    "$SIGNOZ_INGESTION_KEY"
 
             echo "Secrets injected into .env"
 
@@ -374,6 +381,23 @@ jobs:
 
             echo "=== Removing obsolete version attribute ==="
             sed -i '/^version:/d' docker-compose.yml
+
+            echo "=== Selecting OpenTelemetry collector config ==="
+            if grep -q '^SIGNOZ_ENABLED=true' .env; then
+              if ! grep -q '^SIGNOZ_REGION=' .env || [ -z "$(grep '^SIGNOZ_REGION=' .env | cut -d= -f2-)" ]; then
+                echo "ERROR: SIGNOZ_ENABLED=true but SIGNOZ_REGION is empty"
+                exit 1
+              fi
+              if ! grep -q '^SIGNOZ_INGESTION_KEY=' .env || [ -z "$(grep '^SIGNOZ_INGESTION_KEY=' .env | cut -d= -f2-)" ]; then
+                echo "ERROR: SIGNOZ_ENABLED=true but SIGNOZ_INGESTION_KEY is empty"
+                exit 1
+              fi
+              cp otel/collector.signoz-cloud.yaml otel/collector.generated.yaml
+              echo "Using SigNoz Cloud dual-export collector config"
+            else
+              cp otel/collector.yaml otel/collector.generated.yaml
+              echo "Using local-only collector config"
+            fi
 
             echo "=== Pulling pre-built images from Docker Hub ==="
             docker compose pull playwright classifier translator || true
@@ -487,26 +511,8 @@ jobs:
             echo "=== Final service status ==="
 
             echo "=== Nginx/Certbot steps removed (Traefik handles TLS) ==="
-            echo "=== Smoke tests ==="
-            PASS=0
-            FAIL=0
-            for endpoint in "http://127.0.0.1:4000/health:401" "http://127.0.0.1:7860:200" "http://127.0.0.1:3000/api/health:200" "http://127.0.0.1:8080:200"; do
-              url="${endpoint%:*}"
-              url="${url%:*}:${endpoint##*:}"
-              expected="${endpoint##*:}"
-              # Simpler: just check if port responds
-              url2=$(echo "$endpoint" | rev | cut -d: -f2- | rev)
-              exp=$(echo "$endpoint" | rev | cut -d: -f1 | rev)
-              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url2" 2>/dev/null || echo "000")
-              if [ "$code" = "$exp" ]; then
-                echo "  PASS: $url2 -> $code"
-                PASS=$((PASS+1))
-              else
-                echo "  FAIL: $url2 -> $code (expected $exp)"
-                FAIL=$((FAIL+1))
-              fi
-            done
-            echo "Smoke: $PASS passed, $FAIL failed"
+            echo "=== Health checks ==="
+            python3 scripts/health_check.py
 
             echo "=== Hardening ==="
             sudo ufw status | head -5

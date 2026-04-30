@@ -53,6 +53,20 @@ Copy and fill in the env file:
 cp .env.example .env
 ```
 
+Preferred production path:
+
+- keep local `.env` for development and manual testing
+- keep production secrets in GitHub `production` environment secrets
+- let `.github/workflows/deploy.yml` inject them onto the server during deploy
+
+Shared production config now includes:
+
+- `LOGTO_*` and generic `SSO_*` for shared auth
+- `SMTP_*` for transactional email
+- `REPORTING_*` for Grafana email/Slack/webhook and shared reporting sinks
+- `UPTIME_KUMA_*` for shared uptime monitoring
+- `SIGNOZ_*` for optional SigNoz Cloud export
+
 Minimum required values:
 
 ```bash

@@ -24,6 +24,7 @@ volumes:
   lago-db-data:
   lago-storage:
   lago-redis-data:
+  uptime-kuma-data:
 
 services:
 
@@ -207,6 +208,33 @@ services:
     - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
     - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: autonomyx-uptime-kuma
+    restart: always
+    ports:
+    - "127.0.0.1:3001:3001"
+    networks:
+    - coolify
+    volumes:
+    - uptime-kuma-data:/app/data
+    environment:
+    - TZ=${TZ:-UTC}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - node -e "fetch('http://127.0.0.1:3001').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.uptime-kuma.rule=Host(`uptime.openautonomyx.com`)"
+    - "traefik.http.routers.uptime-kuma.entrypoints=https"
+    - "traefik.http.routers.uptime-kuma.tls.certresolver=letsencrypt"
+    - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
+
   langflow:
     ports:
     - "127.0.0.1:7860:7860"
@@ -370,7 +398,7 @@ services:
     - coolify
     command: ["--config", "/etc/otel/collector.yaml"]
     volumes:
-    - ./otel/collector.yaml:/etc/otel/collector.yaml:ro
+    - ./otel/collector.generated.yaml:/etc/otel/collector.yaml:ro
     - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
     - "traefik.enable=false"

@@ -8,7 +8,7 @@ import httpx
 import os
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 os.environ.setdefault("OPENFGA_URL",           "http://openfga:8080")
 os.environ.setdefault("OPENFGA_STORE_ID",      "test-store-id")
@@ -123,44 +123,53 @@ async def test_fga_write_network_error():
 async def test_custom_auth_non_agent_passes():
     """Request with no agent_name in metadata passes without FGA check."""
     request = AsyncMock()
-    request.metadata = {}
-    request.model = "ollama/qwen3:30b-a3b"
+    request.json.return_value = {}
     result = await fga.custom_auth(request)
-    assert result is True
+    assert result is not None
+    assert getattr(result, "api_key", "") == ""
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_custom_auth_agent_allowed():
     respx.post(CHECK_URL).mock(return_value=httpx.Response(200, json={"allowed": True}))
     request = AsyncMock()
-    request.metadata = {
-        "agent_name": "fraud-sentinel",
-        "tenant_id":  "tenant-acme",
+    request.json.return_value = {
+        "model": "ollama/qwen3:30b-a3b",
+        "metadata": {
+            "agent_name": "fraud-sentinel",
+            "tenant_id":  "tenant-acme",
+        },
     }
-    request.model = "ollama/qwen3:30b-a3b"
     result = await fga.custom_auth(request)
-    assert result is True
+    assert result is not None
+    assert getattr(result, "api_key", "") == ""
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_custom_auth_agent_denied():
     respx.post(CHECK_URL).mock(return_value=httpx.Response(200, json={"allowed": False}))
     request = AsyncMock()
-    request.metadata = {"agent_name": "bad-agent", "tenant_id": "tenant-acme"}
-    request.model = "gpt-4o"
-    result = await fga.custom_auth(request)
-    assert result is False
+    request.json.return_value = {
+        "model": "gpt-4o",
+        "metadata": {"agent_name": "bad-agent", "tenant_id": "tenant-acme"},
+    }
+    with pytest.raises(HTTPException) as exc:
+        await fga.custom_auth(request)
+    assert exc.value.status_code == 403
 
 @pytest.mark.asyncio
 async def test_custom_auth_exception_returns_false():
-    """Exceptions during auth → fail closed (False)."""
+    """Exceptions during auth fail closed with 403."""
     request = AsyncMock()
-    request.metadata = {"agent_name": "x"}
-    request.model = "ollama/qwen3:30b-a3b"
+    request.json.return_value = {
+        "model": "ollama/qwen3:30b-a3b",
+        "metadata": {"agent_name": "x"},
+    }
     # Make fga_check raise
     with patch.object(fga, "fga_check", side_effect=Exception("boom")):
-        result = await fga.custom_auth(request)
-    assert result is False
+        with pytest.raises(HTTPException) as exc:
+            await fga.custom_auth(request)
+    assert exc.value.status_code == 403
 
 
 # ── POST /authz/grant ─────────────────────────────────────────────────────────

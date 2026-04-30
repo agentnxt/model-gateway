@@ -5,6 +5,7 @@ Unit tests for OpenFGA authorization middleware.
 
 import pytest
 import sys, os
+from fastapi import HTTPException
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 
@@ -98,12 +99,13 @@ class TestFGACheckFailSafe:
         openfga_authz.OPENFGA_STORE_ID = "test-store"
 
         class MockRequest:
-            metadata = {}  # no agent_name
-            model = "ollama/qwen3:30b-a3b"
+            async def json(self):
+                return {}
 
         result = await custom_auth(MockRequest())
         openfga_authz.OPENFGA_STORE_ID = original
-        assert result is True  # non-agent requests bypass
+        assert result is not None
+        assert getattr(result, "api_key", "") == ""
 
     @pytest.mark.asyncio
     async def test_custom_auth_denies_agent_with_unreachable_openfga(self):
@@ -117,13 +119,17 @@ class TestFGACheckFailSafe:
         openfga_authz.OPENFGA_STORE_ID = "test-store"
 
         class MockRequest:
-            metadata = {"agent_name": "fraud-sentinel", "tenant_id": "tenant-acme"}
-            model = "ollama/qwen3:30b-a3b"
+            async def json(self):
+                return {
+                    "model": "ollama/qwen3:30b-a3b",
+                    "metadata": {"agent_name": "fraud-sentinel", "tenant_id": "tenant-acme"},
+                }
 
-        result = await custom_auth(MockRequest())
+        with pytest.raises(HTTPException) as exc:
+            await custom_auth(MockRequest())
         openfga_authz.OPENFGA_URL = original_url
         openfga_authz.OPENFGA_STORE_ID = original_store
-        assert result is False  # fail closed
+        assert exc.value.status_code == 403  # fail closed
 
 
 class TestBootstrapTuples:

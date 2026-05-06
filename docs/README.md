@@ -3,6 +3,7 @@
 ## For operators (you, deploying the platform)
 
 - [Architecture](./architecture.md) — what runs where and why
+- [Enterprise AI Gateway Blueprint](./enterprise-ai-gateway.md) — control-plane pipeline, policy, routing, billing, and observability requirements
 - [Operator Setup](./operator-setup.md) — deploy the full two-node stack
 - [Tenant Onboarding](./tenant-onboarding.md) — add a new customer in one command
 - [Model Management](./model-management.md) — pull, swap, and tune local models
